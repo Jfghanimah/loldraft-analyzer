@@ -17,7 +17,6 @@ def open_matches():
         json_content = f.read()
         match_info = json.loads(json_content)
 
-
     for i, match_id in enumerate(match_ids[:10]):
         print(f"Geting match data #{i} for: {match_id}")
         match = lol_watcher.match.by_id(my_region, match_id)
@@ -29,14 +28,16 @@ def open_matches():
             match_data.append(champ_name)
 
         match_info[match_id] = match_data
+        # Remove match_id from json
+        del match_ids[i]
 
-        #Cant hit 2000 for some reason
         with open('save_data/match_info.json', 'w') as f:
             json_content = json.dumps(match_info)
             f.write(json_content)
+        with open('save_data/match_ids.json', 'w') as f:
+            json_content = json.dumps(match_ids)
+            f.write(json_content)
 
-        # Remove match_id from json
-        del match_ids[i]
 
 
 
@@ -124,7 +125,7 @@ def get_more_puuids():
         json_content = json.dumps(match_ids)
         f.write(json_content)
 
-        
+
 
 open_matches()
 
