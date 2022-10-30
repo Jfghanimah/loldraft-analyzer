@@ -5,19 +5,15 @@ from riotwatcher import LolWatcher, ApiError
 lol_watcher = LolWatcher("RGAPI-bf21eefa-9b28-4b78-bb3f-6a519b0fd367")
 my_region = 'na1'
 
-match_id = 'NA1_4438021106'
-
 
 def open_matches():
     # Open saved info
     with open('save_data/match_ids.json') as f:
-        json_content = f.read()
-        match_ids = json.loads(json_content)
+        match_ids = json.loads(f.read())
     with open('save_data/match_info.json') as f:
-        json_content = f.read()
-        match_info = json.loads(json_content)
+        match_info = json.loads(f.read())
 
-    for i, match_id in enumerate(match_ids):
+    for i, match_id in enumerate(match_ids[]):
         print(f"Geting match data #{i} for: {match_id}")
         match = lol_watcher.match.by_id(my_region, match_id)
 
@@ -31,13 +27,12 @@ def open_matches():
         # Remove match_id from json
         del match_ids[i]
 
-        # Save every match incase of error
-        with open('save_data/match_info.json', 'w') as f:
-            json_content = json.dumps(match_info)
-            f.write(json_content)
-        with open('save_data/match_ids.json', 'w') as f:
-            json_content = json.dumps(match_ids)
-            f.write(json_content)
+        if i%100 == 0:
+            # Save every match incase of error
+            with open('save_data/match_info.json', 'w') as f:
+                f.write(json.dumps(match_info))
+            with open('save_data/match_ids.json', 'w') as f:
+                f.write(json.dumps(match_ids))
 
 
 
@@ -45,14 +40,11 @@ def open_matches():
 def get_more_match_ids():
     # Open saved information
     with open('save_data/match_ids.json') as f:
-        json_content = f.read()
-        match_ids = json.loads(json_content)
+        match_ids = json.loads(f.read())
     with open('save_data/puuids.json') as f:
-        json_content = f.read()
-        puuids = json.loads(json_content)
+        puuids = json.loads(f.read())
     with open('save_data/puuids_checked.json') as f:
-        json_content = f.read()
-        puuids_checked = json.loads(json_content)
+        puuids_checked = json.loads(f.read())
 
 
     # Get match history for each puuid 
@@ -70,14 +62,11 @@ def get_more_match_ids():
 
     # Save variables back to json
     with open('save_data/puuids.json', 'w') as f:
-        json_content = json.dumps(puuids)
-        f.write(json_content)
+        f.write(json.dumps(puuids))
     with open('save_data/puuids_checked.json', 'w') as f:
-        json_content = json.dumps(puuids_checked)
-        f.write(json_content)
+        f.write(json.dumps(puuids_checked))
     with open('save_data/match_ids.json', 'w') as f:
-        json_content = json.dumps(match_ids)
-        f.write(json_content)
+        f.write(json.dumps(match_ids))
 
 
 
@@ -85,14 +74,11 @@ def get_more_match_ids():
 def get_more_puuids():
     # Open saved information
     with open('save_data/match_ids.json') as f:
-        json_content = f.read()
-        match_ids = json.loads(json_content)
+        match_ids = json.loads(f.read())
     with open('save_data/puuids.json') as f:
-        json_content = f.read()
-        puuids = json.loads(json_content)
+        puuids = json.loads(f.read())
     with open('save_data/puuids_checked.json') as f:
-        json_content = f.read()
-        puuids_checked = json.loads(json_content)
+        puuids_checked = json.loads(f.read())
 
 
     # Gather more puuids
@@ -117,14 +103,11 @@ def get_more_puuids():
 
     # Save variables back to json
     with open('save_data/puuids.json', 'w') as f:
-        json_content = json.dumps(puuids)
-        f.write(json_content)
+        f.write(json.dumps(puuids))
     with open('save_data/puuids_checked.json', 'w') as f:
-        json_content = json.dumps(puuids_checked)
-        f.write(json_content)
+        f.write(json.dumps(puuids_checked))
     with open('save_data/match_ids.json', 'w') as f:
-        json_content = json.dumps(match_ids)
-        f.write(json_content)
+        f.write(json.dumps(match_ids))
 
 
 

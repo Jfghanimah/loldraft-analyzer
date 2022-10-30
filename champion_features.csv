@@ -9,27 +9,27 @@ Anivia,Battlemage,Magical,Ranged,1,,,1,,1,1,1
 Annie,Burst Mage,Magical,Ranged,,,1,1,1,,,
 Aphelios,Marksman,Physical,Ranged,,,1,1,,1,1,1
 Ashe,Marksman,Physical,Ranged,,1,,1,1,,1,
-Aurelion Sol,Battlemage,Magical,Ranged,1,,,1,1,1,,
+AurelionSol,Battlemage,Magical,Ranged,1,,,1,1,1,,
 Azir,Battlemage,Magical,Ranged,,,1,1,,1,1,1
 Bard,Catcher,Magical,Ranged,,1,,1,1,1,,
-Bel'Veth,Skirmisher,Physical,Melee,1,,1,,,,,
+Belveth,Skirmisher,Physical,Melee,1,,1,,,,,
 Blitzcrank,"Catcher, Vanguard",Magical,Melee,1,,,1,1,,,
 Brand,Burst Mage,Magical,Ranged,1,,,1,,,,1
 Braum,Warden,Magical,Melee,,,1,1,1,1,,
 Caitlyn,Marksman,Physical,Ranged,1,,1,,,,1,1
 Camille,Diver,Physical,Melee,,,1,1,1,,,
 Cassiopeia,Battlemage,Magical,Ranged,,,1,1,,1,,1
-Cho'Gath,Vanguard,Magical,Melee,,,1,1,,1,,
+Chogath,Vanguard,Magical,Melee,,,1,1,,1,,
 Corki,Marksman,Magical,Ranged,,,1,,,1,1,1
 Darius,Juggernaut,Physical,Melee,1,,,1,,,,
 Diana,"Assassin, Diver",Magical,Melee,,1,,,1,,1,
-Dr.Mundo,Juggernaut,Magical,Melee,1,,,,,,1,
+DrMundo,Juggernaut,Magical,Melee,1,,,,,,1,
 Draven,Marksman,Physical,Ranged,1,,,,,1,,
 Ekko,Assassin,Magical,Melee,,1,,,,1,,1
 Elise,Diver,Magical,MIX,1,,,1,,,,
 Evelynn,Assassin,Magical,Melee,,,1,,,,,
 Ezreal,Marksman,Physical,Ranged,,1,,,,,1,
-Fiddlesticks,"Battlemage, Catcher",Magical,Melee,1,,,1,1,,,1
+FiddleSticks,"Battlemage, Catcher",Magical,Melee,1,,,1,1,,,1
 Fiora,Skirmisher,Physical,Melee,,,1,,,,,
 Fizz,Assassin,Magical,Melee,1,,1,,,,,
 Galio,Warden,Magical,Melee,,,1,1,1,1,,
@@ -45,12 +45,12 @@ Illaoi,Juggernaut,Physical,Melee,1,,,,,1,,
 Irelia,Diver,Physical,Melee,,1,,1,1,,,
 Ivern,"Enchanter, Catcher",Magical,Ranged,1,,,1,1,1,,
 Janna,Enchanter,Magical,Ranged,,1,,1,,1,1,
-Jarvan IV,Diver,Physical,Melee,1,,,1,1,,,
+JarvanIV,Diver,Physical,Melee,1,,,1,1,,,
 Jax,Skirmisher,Physical,Melee,,,1,1,,,,
 Jayce,"Artillery, Skirmisher",Physical,MIX,,1,,,,1,1,
 Jhin,"Marksman, Catcher",Physical,Ranged,1,1,,1,,,,1
 Jinx,Marksman,Physical,Ranged,,,1,1,,1,1,1
-Kai'Sa,Marksman,Physical,Ranged,1,,,,,,1,1
+Kaisa,Marksman,Physical,Ranged,1,,,,,,1,1
 Kalista,Marksman,Physical,Ranged,1,,,,1,,,
 Karma,"Burst Mage, Enchanter",Magical,Ranged,1,,,1,,,1,1
 Karthus,Battlemage,Magical,Ranged,,,1,,,1,,1
@@ -59,12 +59,12 @@ Katarina,Assassin,Magical,Melee,1,,,,,,,
 Kayle,Battlemage,Magical,Ranged,,,1,,,1,,1
 Kayn,Skirmisher,Physical,Melee,,,1,,,,,
 Kennen,Battlemage,Magical,Ranged,1,,1,1,1,1,,
-Kha'Zix,Assassin,Physical,Melee,1,,1,,,,1,
+Khazix,Assassin,Physical,Melee,1,,1,,,,1,
 Kindred,Marksman,Physical,Ranged,,,1,,,1,,
 Kled,Diver,Physical,Melee,1,1,,,1,,,
-Kog'Maw,Marksman,MIX,Ranged,,1,,,,,1,1
-LeBlanc,Burst Mage,Magical,Ranged,1,,,1,1,,1,
-Lee Sin,Diver,Physical,Melee,1,,,,1,1,,
+KogMaw,Marksman,MIX,Ranged,,1,,,,,1,1
+Leblanc,Burst Mage,Magical,Ranged,1,,,1,1,,1,
+LeeSin,Diver,Physical,Melee,1,,,,1,1,,
 Leona,Vanguard,Magical,Melee,1,,1,1,1,1,,
 Lillia,Skirmisher,Magical,Melee,,1,,1,1,1,1,
 Lissandra,Burst Mage,Magical,Ranged,1,,,1,1,1,,1
@@ -74,8 +74,8 @@ Lux,"Burst Mage, Artillery",Magical,Ranged,1,1,,1,,1,1,1
 Malphite,Vanguard,Physical,Melee,,,1,1,1,,,
 Malzahar,Battlemage,Magical,Ranged,,1,,1,,1,,1
 Maokai,Vanguard,Magical,Melee,,,1,1,1,1,,
-Master Yi,Skirmisher,Physical,Melee,,,1,,,,,
-Miss Fortune,Marksman,Physical,Ranged,1,,,,,,,
+MasterYi,Skirmisher,Physical,Melee,,,1,,,,,
+MissFortune,Marksman,Physical,Ranged,1,,,,,,,
 Mordekaiser,Juggernaut,Magical,Melee,1,,,1,,1,,1
 Morgana,Catcher,Magical,Ranged,1,,,1,1,1,,
 Nami,Enchanter,Magical,Ranged,,1,,1,1,1,,
@@ -85,7 +85,7 @@ Neeko,"Burst Mage, Catcher",Magical,Ranged,1,,,1,1,1,,1
 Nidalee,Skirmisher,Magical,MIX,1,,,,,,1,
 Nilah,Skirmisher,Physical,Melee,1,,1,,1,1,,
 Nocturne,Assassin,Physical,Melee,1,,,,1,,,
-Nunu and Willump,Vanguard,Magical,Melee,1,,,1,1,,,
+Nunu,Vanguard,Magical,Melee,1,,,1,1,,,
 Olaf,Diver,Physical,Melee,1,,1,,,,,
 Orianna,Burst Mage,Magical,Ranged,,,1,1,1,1,1,1
 Ornn,Vanguard,Magical,Melee,,,1,1,1,,,
@@ -96,7 +96,7 @@ Qiyana,Assassin,Physical,Melee,,,1,1,1,,,
 Quinn,Marksmen,Physical,Ranged,1,,1,,,,,
 Rakan,Catcher,Magical,Melee,,,1,1,1,1,,
 Rammus,Vanguard,Magical,Melee,,,1,1,1,,,
-Rek'Sai,Diver,Physical,Melee,1,,,1,1,,,
+RekSai,Diver,Physical,Melee,1,,,1,1,,,
 Rell,"Vanguard, Warden",Magical,Melee,1,,1,1,1,1,,
 Renata,Enchanter,Magical,Ranged,,,1,1,,1,,
 Renekton,Diver,Physical,Melee,1,,,1,1,,,
@@ -121,7 +121,7 @@ Soraka,Enchanter,Magical,Ranged,1,,,1,,1,,
 Swain,Battlemage,Magical,Ranged,1,,,1,,1,,1
 Sylas,"Burst Mage, Skirmisher",Magical,Melee,1,,,,1,1,,
 Syndra,Burst Mage,Magical,Ranged,,1,1,1,,1,1,1
-Tahm Kench,Warden,Magical,Melee,1,,,1,1,1,,
+TahmKench,Warden,Magical,Melee,1,,,1,1,1,,
 Taliyah,Battlemage,Magical,Ranged,,1,,1,,1,1,1
 Talon,Assassin,Physical,Melee,,,1,,,,,
 Taric,"Enchanter, Warden",Magical,Melee,,,1,1,,1,,
@@ -130,14 +130,14 @@ Thresh,"Catcher, Warden",Magical,Melee,1,,1,1,1,1,,
 Tristana,Marksman,Physical,Ranged,1,,,,,1,,1
 Trundle,Juggernaut,Physical,Melee,,1,,1,,1,,
 Tryndamere,Skirmisher,Physical,Melee,1,,,,,,,
-Twisted Fate,Burst Mage,Magical,Ranged,,1,,1,,,1,
+TwistedFate,Burst Mage,Magical,Ranged,,1,,1,,,1,
 Twitch,Marksman,Physical,Ranged,,,1,,,,,1
 Udyr,Juggernaut,Physical,Melee,,,1,1,,,,
 Urgot,Juggernaut,Physical,Melee,,1,,1,,1,,
 Varus,"Marksman, Artillery",Physical,Melee,1,,,1,1,,1,
 Vayne,Marksman,Physical,Ranged,,,1,1,,1,,
 Veigar,Burst Mage,Magical,Ranged,,,1,1,,1,,1
-Vel'Koz,Artillery,Magical,Ranged,1,1,,1,,,1,1
+Velkoz,Artillery,Magical,Ranged,1,1,,1,,,1,1
 Vex,Burst Mage,Magical,Ranged,1,,,1,1,1,,1
 Vi,Diver,Physical,Melee,,,1,1,1,,,
 Viego,Skirmisher,Physical,Melee,,1,,,1,,,
@@ -145,10 +145,10 @@ Viktor,Battlemage,Magical,Ranged,,,1,1,,1,1,1
 Vladimir,Battlemage,Magical,Ranged,,,1,,,,,
 Volibear,Juggernaut,MIX,Melee,1,,,1,1,,,
 Warwick,Diver,Magical,Melee,1,,,1,1,,,
-Wukong,Diver,Physical,Melee,,,1,,1,,,
+MonkeyKing,Diver,Physical,Melee,,,1,,1,,,
 Xayah,Marksman,Physical,Ranged,1,,1,1,,1,1,1
 Xerath,Artillery,Magical,Ranged,,1,,1,,,1,1
-Xin Zhao,Diver,Physical,Melee,1,,,1,,1,,
+XinZhao,Diver,Physical,Melee,1,,,1,,1,,
 Yasuo,Skirmisher,Physical,Melee,,1,,1,1,,,1
 Yone,"Assassin, Skirmisher",Physical,Melee,,,1,1,1,,,1
 Yorick,Juggernaut,Physical,Melee,,1,,,,,,
