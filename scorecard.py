@@ -1,12 +1,9 @@
 import csv 
 
-
 champion_features = {}
 with open("champion_features.csv") as f:
     for row in csv.DictReader(f):
         champion_features[row['Champion']] = row
-
-
 
 game1 = ['Blue', 'Wukong', 'Ekko', 'Irelia', 'Xayah', 'Rakan', 'Sett', 'Kindred', 'Swain', 'Ezreal', 'Senna']
 game2 = ['Red', 'Quinn', 'Nocturne', 'Akshan', 'Miss Fortune', 'Senna', 'Camille', 'Hecarim', 'Syndra', 'Lucian', 'Nami']
@@ -14,7 +11,11 @@ game3 = ['Blue', 'Wukong', 'Xin Zhao', 'Irelia', 'Seraphine', 'Sona', 'Kayle', '
 game4 = ['Blue', 'Ornn', 'Graves', 'Azir', 'Ashe', 'Nautilus', 'Nasus', 'Lee Sin', 'Akali', 'Miss Fortune', 'Lux']
 game5 = ['Red', 'Fiora', 'Shaco', "Vel'Koz", 'Jinx', 'Morgana', 'Malphite', 'Viego', 'Orianna', 'Twitch', 'Rell']
 
-
+'''
+print(team_scorecard(game5[1:6]))
+print(" ")
+print(team_scorecard(game5[6:]))
+'''
 
 
 def team_scorecard(champions):
@@ -69,50 +70,38 @@ def team_scorecard(champions):
 
         
     #Start Scoring team
-    print(f"Tank Points: {tank_count}")
-    if tank_count >= 1.5:
-        total_score += 1
-    elif tank_count >= 1:
-        total_score += 0.5
+    #print(f"Tank Points: {tank_count}")
+    if tank_count >= 3:
+        total_score += 1.5
 
-    print(f"Magic: {magic_count} - Physical: {phyiscal_count}")
+    #print(f"Magic: {magic_count} - Physical: {phyiscal_count}")
+
     if magic_count >= 2 and phyiscal_count >= 2:
-        total_score += 1
+        total_score += 1.5
    
-    print(f"Melee Champions: {melee_count}")
+    #print(f"Melee Champions: {melee_count}")
     if melee_count == 2 or melee_count == 3:
+        total_score += 0.5 # Wow it hates this
+
+    #print(f"Heavy CC Champions: {heavycc}")
+    if heavycc >= 2:
         total_score += 1
 
-    print(f"Heavy CC Champions: {heavycc}")
-    if heavycc >= 4:
+    #print(f"Dis/Engage Champions: {engage_dis}")
+    if engage_dis >= 2:
         total_score += 1
-    elif heavycc == 3:
-        total_score += 0.5
 
-    print(f"Dis/Engage Champions: {engage_dis}")
-    if engage_dis >= 3:
-        total_score += 1
-    elif engage_dis == 2:
-        total_score += 0.5
-
-    print(f"Poke Champions: {poke}")
+    #print(f"Poke Champions: {poke}")
     if poke >= 1:
-        total_score += 1
+        total_score += 0.25 # Wow it also hates this
 
-    print(f"Waveclear Champions: {wave_clear}")
-    if wave_clear >= 1:
-        total_score +=1
+    #print(f"Waveclear Champions: {wave_clear}")
+    if wave_clear >= 0:
+        total_score += 0.5
 
-    print(f"Powercurve {power_curve}")
+    #print(f"Powercurve {power_curve}")
     if power_curve[0] >= 2 and power_curve[1] >= 1 and power_curve[2] >= 2:
-        total_score += 1
-    elif power_curve[0] >= 1 and power_curve[1] >= 1 and power_curve[2] >= 1:
-        total_score += 0.75
+        total_score += 0.25 # It hates this one too58)
 
-    return (total_score/8) * 100
+    return (total_score)
 
-
-
-print(team_scorecard(game5[1:6]))
-print(" ")
-print(team_scorecard(game5[6:]))
