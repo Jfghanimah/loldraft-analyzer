@@ -1,6 +1,4 @@
 -- API STUFF --
-1. Parse out important data from matches
-2. Place match_id in match_checked.json when read & remove from match_ids.json
 3. Start parsing the 79,000 match_ids (24 hours)
 
 -- While wating for match_ids --
