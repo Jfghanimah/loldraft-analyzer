@@ -1,162 +1,162 @@
-Champion,Class,Damage,Range,Early,Mid,Late,HeavyCC,Engage,Disengage,Poke,Waveclear
-Aatrox,Juggernaut,Physical,Melee,1,,,1,1,,,
-Ahri,Burst Mage,Magical,Ranged,,1,,1,,,,1
-Akali,Assassin,Magical,Melee,1,,,,,,,
-Akshan,"Marksman, Assassin",Physical,Ranged,1,,,,,,1,1
-Alistar,Vanguard,Magical,Melee,,1,,1,1,1,,
-Amumu,Vanguard,Magical,Melee,,1,,1,1,1,,
-Anivia,Battlemage,Magical,Ranged,1,,,1,,1,1,1
-Annie,Burst Mage,Magical,Ranged,,,1,1,1,,,
-Aphelios,Marksman,Physical,Ranged,,,1,1,,1,1,1
-Ashe,Marksman,Physical,Ranged,,1,,1,1,,1,
-AurelionSol,Battlemage,Magical,Ranged,1,,,1,1,1,,
-Azir,Battlemage,Magical,Ranged,,,1,1,,1,1,1
-Bard,Catcher,Magical,Ranged,,1,,1,1,1,,
-Belveth,Skirmisher,Physical,Melee,1,,1,,,,,
-Blitzcrank,"Catcher, Vanguard",Magical,Melee,1,,,1,1,,,
-Brand,Burst Mage,Magical,Ranged,1,,,1,,,,1
-Braum,Warden,Magical,Melee,,,1,1,1,1,,
-Caitlyn,Marksman,Physical,Ranged,1,,1,,,,1,1
-Camille,Diver,Physical,Melee,,,1,1,1,,,
-Cassiopeia,Battlemage,Magical,Ranged,,,1,1,,1,,1
-Chogath,Vanguard,Magical,Melee,,,1,1,,1,,
-Corki,Marksman,Magical,Ranged,,,1,,,1,1,1
-Darius,Juggernaut,Physical,Melee,1,,,1,,,,
-Diana,"Assassin, Diver",Magical,Melee,,1,,,1,,1,
-DrMundo,Juggernaut,Magical,Melee,1,,,,,,1,
-Draven,Marksman,Physical,Ranged,1,,,,,1,,
-Ekko,Assassin,Magical,Melee,,1,,,,1,,1
-Elise,Diver,Magical,MIX,1,,,1,,,,
-Evelynn,Assassin,Magical,Melee,,,1,,,,,
-Ezreal,Marksman,Physical,Ranged,,1,,,,,1,
-FiddleSticks,"Battlemage, Catcher",Magical,Melee,1,,,1,1,,,1
-Fiora,Skirmisher,Physical,Melee,,,1,,,,,
-Fizz,Assassin,Magical,Melee,1,,1,,,,,
-Galio,Warden,Magical,Melee,,,1,1,1,1,,
-Gangplank,Skirmisher,Physical,Melee,,,1,,,1,1,1
-Garen,Juggernaut,Physical,Melee,,1,,,,,,
-Gnar,Juggernaut,Physical,Melee,,1,,1,1,,1,
-Gragas,Vanguard,Magical,Melee,1,,,1,1,1,,1
-Graves,Skirmisher,Physical,Ranged,,,1,,,1,,1
-Gwen,Skirmisher,Magical,Melee,,,1,,,1,,
-Hecarim,Diver,Physical,Melee,1,,1,1,1,,,
-Heimerdinger,Battlemage,Magical,Ranged,1,,,1,,1,1,1
-Illaoi,Juggernaut,Physical,Melee,1,,,,,1,,
-Irelia,Diver,Physical,Melee,,1,,1,1,,,
-Ivern,"Enchanter, Catcher",Magical,Ranged,1,,,1,1,1,,
-Janna,Enchanter,Magical,Ranged,,1,,1,,1,1,
-JarvanIV,Diver,Physical,Melee,1,,,1,1,,,
-Jax,Skirmisher,Physical,Melee,,,1,1,,,,
-Jayce,"Artillery, Skirmisher",Physical,MIX,,1,,,,1,1,
-Jhin,"Marksman, Catcher",Physical,Ranged,1,1,,1,,,,1
-Jinx,Marksman,Physical,Ranged,,,1,1,,1,1,1
-Kaisa,Marksman,Physical,Ranged,1,,,,,,1,1
-Kalista,Marksman,Physical,Ranged,1,,,,1,,,
-Karma,"Burst Mage, Enchanter",Magical,Ranged,1,,,1,,,1,1
-Karthus,Battlemage,Magical,Ranged,,,1,,,1,,1
-Kassadin,Assassin,Magical,Melee,,,1,,,,,
-Katarina,Assassin,Magical,Melee,1,,,,,,,
-Kayle,Battlemage,Magical,Ranged,,,1,,,1,,1
-Kayn,Skirmisher,Physical,Melee,,,1,,,,,
-Kennen,Battlemage,Magical,Ranged,1,,1,1,1,1,,
-Khazix,Assassin,Physical,Melee,1,,1,,,,1,
-Kindred,Marksman,Physical,Ranged,,,1,,,1,,
-Kled,Diver,Physical,Melee,1,1,,,1,,,
-KogMaw,Marksman,MIX,Ranged,,1,,,,,1,1
-Leblanc,Burst Mage,Magical,Ranged,1,,,1,1,,1,
-LeeSin,Diver,Physical,Melee,1,,,,1,1,,
-Leona,Vanguard,Magical,Melee,1,,1,1,1,1,,
-Lillia,Skirmisher,Magical,Melee,,1,,1,1,1,1,
-Lissandra,Burst Mage,Magical,Ranged,1,,,1,1,1,,1
-Lucian,Marksman,Physical,Ranged,1,,,,,,,1
-Lulu,Enchanter,Magical,Ranged,1,,1,1,,1,,
-Lux,"Burst Mage, Artillery",Magical,Ranged,1,1,,1,,1,1,1
-Malphite,Vanguard,Physical,Melee,,,1,1,1,,,
-Malzahar,Battlemage,Magical,Ranged,,1,,1,,1,,1
-Maokai,Vanguard,Magical,Melee,,,1,1,1,1,,
-MasterYi,Skirmisher,Physical,Melee,,,1,,,,,
-MissFortune,Marksman,Physical,Ranged,1,,,,,,,
-Mordekaiser,Juggernaut,Magical,Melee,1,,,1,,1,,1
-Morgana,Catcher,Magical,Ranged,1,,,1,1,1,,
-Nami,Enchanter,Magical,Ranged,,1,,1,1,1,,
-Nasus,Juggernaut,Physical,Melee,,,1,,,,,
-Nautilus,Vanguard,Magical,Melee,1,,1,1,1,,,
-Neeko,"Burst Mage, Catcher",Magical,Ranged,1,,,1,1,1,,1
-Nidalee,Skirmisher,Magical,MIX,1,,,,,,1,
-Nilah,Skirmisher,Physical,Melee,1,,1,,1,1,,
-Nocturne,Assassin,Physical,Melee,1,,,,1,,,
-Nunu,Vanguard,Magical,Melee,1,,,1,1,,,
-Olaf,Diver,Physical,Melee,1,,1,,,,,
-Orianna,Burst Mage,Magical,Ranged,,,1,1,1,1,1,1
-Ornn,Vanguard,Magical,Melee,,,1,1,1,,,
-Pantheon,Diver,Physical,Melee,1,,1,1,1,,,
-Poppy,Warden,Physical,Melee,1,,,1,1,1,,
-Pyke,"Assassin, Catcher",Physical,Melee,,1,,1,1,,,
-Qiyana,Assassin,Physical,Melee,,,1,1,1,,,
-Quinn,Marksmen,Physical,Ranged,1,,1,,,,,
-Rakan,Catcher,Magical,Melee,,,1,1,1,1,,
-Rammus,Vanguard,Magical,Melee,,,1,1,1,,,
-RekSai,Diver,Physical,Melee,1,,,1,1,,,
-Rell,"Vanguard, Warden",Magical,Melee,1,,1,1,1,1,,
-Renata,Enchanter,Magical,Ranged,,,1,1,,1,,
-Renekton,Diver,Physical,Melee,1,,,1,1,,,
-Rengar,"Assassin, Diver",Physical,Melee,1,,1,,,,,
-Riven,Diver,Physical,Melee,,,1,1,1,,,
-Rumble,Battlemage,Magical,Melee,1,,,,1,1,,1
-Ryze,Battlemage,Magical,Ranged,,,1,1,,,,1
-Samira,Marksman,Physical,Melee,1,,1,,,,,
-Sejuani,Vanguard,Magical,Melee,,1,,1,1,1,,
-Senna,"Marksman, Enchanter",Physical,Ranged,,,1,1,,1,1,
-Seraphine,"Burst Mage, Enchanter",Magical,Ranged,,,1,1,,1,1,1
-Sett,Juggernaut,Physical,Melee,1,,,1,1,,,
-Shaco,Assassin,MIX,Melee,1,,1,1,,,,
-Shen,Warden,MIX,Melee,1,,,1,1,1,,
-Shyvana,Juggernaut,Magical,Melee,,1,,,1,,1,
-Singed,"Battlemage, Vanguard",Magical,Melee,,,1,1,,,,
-Sion,Vanguard,Physical,Melee,,1,,1,1,,,
-Sivir,Marksman,Physical,Ranged,,1,,,,1,1,1
-Skarner,Diver,MIX,Melee,,,1,1,,,,
-Sona,Enchanter,Magical,Ranged,,,1,1,,1,1,
-Soraka,Enchanter,Magical,Ranged,1,,,1,,1,,
-Swain,Battlemage,Magical,Ranged,1,,,1,,1,,1
-Sylas,"Burst Mage, Skirmisher",Magical,Melee,1,,,,1,1,,
-Syndra,Burst Mage,Magical,Ranged,,1,1,1,,1,1,1
-TahmKench,Warden,Magical,Melee,1,,,1,1,1,,
-Taliyah,Battlemage,Magical,Ranged,,1,,1,,1,1,1
-Talon,Assassin,Physical,Melee,,,1,,,,,
-Taric,"Enchanter, Warden",Magical,Melee,,,1,1,,1,,
-Teemo,Battlemage,Magical,Ranged,,,1,,,,,1
-Thresh,"Catcher, Warden",Magical,Melee,1,,1,1,1,1,,
-Tristana,Marksman,Physical,Ranged,1,,,,,1,,1
-Trundle,Juggernaut,Physical,Melee,,1,,1,,1,,
-Tryndamere,Skirmisher,Physical,Melee,1,,,,,,,
-TwistedFate,Burst Mage,Magical,Ranged,,1,,1,,,1,
-Twitch,Marksman,Physical,Ranged,,,1,,,,,1
-Udyr,Juggernaut,Physical,Melee,,,1,1,,,,
-Urgot,Juggernaut,Physical,Melee,,1,,1,,1,,
-Varus,"Marksman, Artillery",Physical,Melee,1,,,1,1,,1,
-Vayne,Marksman,Physical,Ranged,,,1,1,,1,,
-Veigar,Burst Mage,Magical,Ranged,,,1,1,,1,,1
-Velkoz,Artillery,Magical,Ranged,1,1,,1,,,1,1
-Vex,Burst Mage,Magical,Ranged,1,,,1,1,1,,1
-Vi,Diver,Physical,Melee,,,1,1,1,,,
-Viego,Skirmisher,Physical,Melee,,1,,,1,,,
-Viktor,Battlemage,Magical,Ranged,,,1,1,,1,1,1
-Vladimir,Battlemage,Magical,Ranged,,,1,,,,,
-Volibear,Juggernaut,MIX,Melee,1,,,1,1,,,
-Warwick,Diver,Magical,Melee,1,,,1,1,,,
-MonkeyKing,Diver,Physical,Melee,,,1,,1,,,
-Xayah,Marksman,Physical,Ranged,1,,1,1,,1,1,1
-Xerath,Artillery,Magical,Ranged,,1,,1,,,1,1
-XinZhao,Diver,Physical,Melee,1,,,1,,1,,
-Yasuo,Skirmisher,Physical,Melee,,1,,1,1,,,1
-Yone,"Assassin, Skirmisher",Physical,Melee,,,1,1,1,,,1
-Yorick,Juggernaut,Physical,Melee,,1,,,,,,
-Yuumi,"Enchanter, Artillery",Magical,Ranged,,,1,1,1,1,1,
-Zac,Vanguard,Magical,Melee,,,1,1,1,,,
-Zed,Assassin,Physical,Melee,1,,1,,,,1,1
-Zeri,Marksman,Physical,Ranged,,,1,,,,1,1
-Ziggs,Artillery,Magical,Ranged,,1,,1,,1,1,1
-Zilean,"Enchanter, Catcher",Magical,Ranged,,,1,1,,1,,1
-Zoe,Burst Mage,Magical,Ranged,1,,,1,,,1,
-Zyra,Catcher,Magical,Ranged,1,,,1,,1,1,1
+Champion,Class,Physical,Magical,Range,Early,Mid,Late,HeavyCC,Engage,Disengage,Poke,Waveclear
+Aatrox,Juggernaut,3,0,0,1,0,0,1,1,0,0,0
+Ahri,Burst Mage,0,3,1,0,1,0,1,0,0,0,1
+Akali,Assassin,0,3,0,1,0,0,0,0,0,0,0
+Akshan,"Marksman, Assassin",3,0,1,1,0,0,0,0,0,1,1
+Alistar,Vanguard,0,1,0,0,1,0,1,1,1,0,0
+Amumu,Vanguard,0,1,0,0,1,0,1,1,1,0,0
+Anivia,Battlemage,0,3,1,1,0,0,1,0,1,1,1
+Annie,Burst Mage,0,3,1,0,0,1,1,1,0,0,0
+Aphelios,Marksman,3,0,1,0,0,1,1,0,1,1,1
+Ashe,Marksman,3,0,1,0,1,0,1,1,0,1,0
+AurelionSol,Battlemage,0,3,1,1,0,0,1,1,1,0,0
+Azir,Battlemage,0,3,1,0,0,1,1,0,1,1,1
+Bard,Catcher,0,1,1,0,1,0,1,1,1,0,0
+Belveth,Skirmisher,2,0,0,1,0,1,0,0,0,0,0
+Blitzcrank,"Catcher, Vanguard",0,1,0,1,0,0,1,1,0,0,0
+Brand,Burst Mage,0,3,1,1,0,0,1,0,0,0,1
+Braum,Warden,0,1,0,0,0,1,1,1,1,0,0
+Caitlyn,Marksman,3,0,1,1,0,1,0,0,0,1,1
+Camille,Diver,3,0,0,0,0,1,1,1,0,0,0
+Cassiopeia,Battlemage,0,3,1,0,0,1,1,0,1,0,1
+Chogath,Vanguard,0,2,0,0,0,1,1,0,1,0,0
+Corki,Marksman,0,3,1,0,0,1,0,0,1,1,1
+Darius,Juggernaut,3,0,0,1,0,0,1,0,0,0,0
+Diana,"Assassin, Diver",0,3,0,0,1,0,0,1,0,1,0
+Draven,Marksman,3,0,1,1,0,0,0,0,1,0,0
+DrMundo,Juggernaut,1,2,0,1,0,0,0,0,0,1,0
+Ekko,Assassin,0,3,0,0,1,0,0,0,1,0,1
+Elise,Diver,0,3,1,1,0,0,1,0,0,0,0
+Evelynn,Assassin,0,3,0,0,0,1,0,0,0,0,0
+Ezreal,Marksman,2,1,1,0,1,0,0,0,0,1,0
+FiddleSticks,"Battlemage, Catcher",0,3,0,1,0,0,1,1,0,0,1
+Fiora,Skirmisher,3,0,0,0,0,1,0,0,0,0,0
+Fizz,Assassin,0,3,0,1,0,1,0,0,0,0,0
+Galio,Warden,0,2,0,0,0,1,1,1,1,0,0
+Gangplank,Skirmisher,3,0,0,0,0,1,0,0,1,1,1
+Garen,Juggernaut,3,0,0,0,1,0,0,0,0,0,0
+Gnar,Juggernaut,3,0,0,0,1,0,1,1,0,1,0
+Gragas,Vanguard,0,2,0,1,0,0,1,1,1,0,1
+Graves,Skirmisher,3,0,1,0,0,1,0,0,1,0,1
+Gwen,Skirmisher,0,3,0,0,0,1,0,0,1,0,0
+Hecarim,Diver,3,0,0,1,0,1,1,1,0,0,0
+Heimerdinger,Battlemage,0,3,1,1,0,0,1,0,1,1,1
+Illaoi,Juggernaut,3,0,0,1,0,0,0,0,1,0,0
+Irelia,Diver,3,0,0,0,1,0,1,1,0,0,0
+Ivern,"Enchanter, Catcher",0,1,1,1,0,0,1,1,1,0,0
+Janna,Enchanter,0,1,1,0,1,0,1,0,1,1,0
+JarvanIV,Diver,2,0,0,1,0,0,1,1,0,0,0
+Jax,Skirmisher,2,1,0,0,0,1,1,0,0,0,0
+Jayce,"Artillery, Skirmisher",3,0,1,0,1,0,0,0,1,1,0
+Jhin,"Marksman, Catcher",3,0,1,1,1,0,1,0,0,0,1
+Jinx,Marksman,3,0,1,0,0,1,1,0,1,1,1
+Kaisa,Marksman,2,1,1,1,0,0,0,0,0,1,1
+Kalista,Marksman,3,0,1,1,0,0,0,1,0,0,0
+Karma,"Burst Mage, Enchanter",0,1,1,1,0,0,1,0,0,1,1
+Karthus,Battlemage,0,3,1,0,0,1,0,0,1,0,1
+Kassadin,Assassin,0,3,0,0,0,1,0,0,0,0,0
+Katarina,Assassin,0,3,0,1,0,0,0,0,0,0,0
+Kayle,Battlemage,0,3,1,0,0,1,0,0,1,0,1
+Kayn,Skirmisher,3,0,0,0,0,1,0,0,0,0,0
+Kennen,Battlemage,0,3,1,1,0,1,1,1,1,0,0
+Khazix,Assassin,3,0,0,1,0,1,0,0,0,1,0
+Kindred,Marksman,3,0,1,0,0,1,0,0,1,0,0
+Kled,Diver,3,0,0,1,1,0,0,1,0,0,0
+KogMaw,Marksman,2,1,1,0,1,0,0,0,0,1,1
+Leblanc,Burst Mage,0,3,1,1,0,0,1,1,0,1,0
+LeeSin,Diver,2,0,0,1,0,0,0,1,1,0,0
+Leona,Vanguard,0,1,0,1,0,1,1,1,1,0,0
+Lillia,Skirmisher,0,3,0,0,1,0,1,1,1,1,0
+Lissandra,Burst Mage,0,3,1,1,0,0,1,1,1,0,1
+Lucian,Marksman,3,0,1,1,0,0,0,0,0,0,1
+Lulu,Enchanter,0,1,1,1,0,1,1,0,1,0,0
+Lux,"Burst Mage, Artillery",0,3,1,1,1,0,1,0,1,1,1
+Malphite,Vanguard,0,2,0,0,0,1,1,1,0,0,0
+Malzahar,Battlemage,0,3,1,0,1,0,1,0,1,0,1
+Maokai,Vanguard,0,2,0,0,0,1,1,1,1,0,0
+MasterYi,Skirmisher,3,0,0,0,0,1,0,0,0,0,0
+MissFortune,Marksman,3,0,1,1,0,0,0,0,0,0,0
+MonkeyKing,Diver,3,0,0,0,0,1,0,1,0,0,0
+Mordekaiser,Juggernaut,0,3,0,1,0,0,1,0,1,0,1
+Morgana,Catcher,0,2,1,1,0,0,1,1,1,0,0
+Nami,Enchanter,0,1,1,0,1,0,1,1,1,0,0
+Nasus,Juggernaut,2,0,0,0,0,1,0,0,0,0,0
+Nautilus,Vanguard,0,1,0,1,0,1,1,1,0,0,0
+Neeko,"Burst Mage, Catcher",0,3,1,1,0,0,1,1,1,0,1
+Nidalee,Skirmisher,0,2,1,1,0,0,0,0,0,1,0
+Nilah,Skirmisher,2,0,0,1,0,1,0,1,1,0,0
+Nocturne,Assassin,3,0,0,1,0,0,0,1,0,0,0
+Nunu,Vanguard,0,1,0,1,0,0,1,1,0,0,0
+Olaf,Diver,3,0,0,1,0,1,0,0,0,0,0
+Orianna,Burst Mage,0,3,1,0,0,1,1,1,1,1,1
+Ornn,Vanguard,0,1,0,0,0,1,1,1,0,0,0
+Pantheon,Diver,3,0,0,1,0,1,1,1,0,0,0
+Poppy,Warden,2,0,0,1,0,0,1,1,1,0,0
+Pyke,"Assassin, Catcher",1,0,0,0,1,0,1,1,0,0,0
+Qiyana,Assassin,3,0,0,0,0,1,1,1,0,0,0
+Quinn,Marksmen,3,0,1,1,0,1,0,0,0,0,0
+Rakan,Catcher,0,1,0,0,0,1,1,1,1,0,0
+Rammus,Vanguard,0,1,0,0,0,1,1,1,0,0,0
+RekSai,Diver,2,0,0,1,0,0,1,1,0,0,0
+Rell,"Vanguard, Warden",0,1,0,1,0,1,1,1,1,0,0
+Renata,Enchanter,0,1,1,0,0,1,1,0,1,0,0
+Renekton,Diver,2,0,0,1,0,0,1,1,0,0,0
+Rengar,"Assassin, Diver",3,0,0,1,0,1,0,0,0,0,0
+Riven,Diver,3,0,0,0,0,1,1,1,0,0,0
+Rumble,Battlemage,0,3,0,1,0,0,0,1,1,0,1
+Ryze,Battlemage,0,2,1,0,0,1,1,0,0,0,1
+Samira,Marksman,3,0,0,1,0,1,0,0,0,0,0
+Sejuani,Vanguard,0,1,0,0,1,0,1,1,1,0,0
+Senna,"Marksman, Enchanter",3,0,1,0,0,1,1,0,1,1,0
+Seraphine,"Burst Mage, Enchanter",0,2,1,0,0,1,1,0,1,1,1
+Sett,Juggernaut,3,0,0,1,0,0,1,1,0,0,0
+Shaco,Assassin,1,1,0,1,0,1,1,0,0,0,0
+Shen,Warden,1,1,0,1,0,0,1,1,1,0,0
+Shyvana,Juggernaut,1,2,0,0,1,0,0,1,0,1,0
+Singed,"Battlemage, Vanguard",0,2,0,0,0,1,1,0,0,0,0
+Sion,Vanguard,2,1,0,0,1,0,1,1,0,0,0
+Sivir,Marksman,3,0,1,0,1,0,0,0,1,1,1
+Skarner,Diver,1,1,0,0,0,1,1,0,0,0,0
+Sona,Enchanter,0,1,1,0,0,1,1,0,1,1,0
+Soraka,Enchanter,0,1,1,1,0,0,1,0,1,0,0
+Swain,Battlemage,0,3,1,1,0,0,1,0,1,0,1
+Sylas,"Burst Mage, Skirmisher",0,3,0,1,0,0,0,1,1,0,0
+Syndra,Burst Mage,0,3,1,0,1,1,1,0,1,1,1
+TahmKench,Warden,0,2,0,1,0,0,1,1,1,0,0
+Taliyah,Battlemage,0,3,1,0,1,0,1,0,1,1,1
+Talon,Assassin,3,0,0,0,0,1,0,0,0,0,0
+Taric,"Enchanter, Warden",0,1,0,0,0,1,1,0,1,0,0
+Teemo,Battlemage,0,3,1,0,0,1,0,0,0,0,1
+Thresh,"Catcher, Warden",0,1,0,1,0,1,1,1,1,0,0
+Tristana,Marksman,3,0,1,1,0,0,0,0,1,0,1
+Trundle,Juggernaut,2,0,0,0,1,0,1,0,1,0,0
+Tryndamere,Skirmisher,3,0,0,1,0,0,0,0,0,0,0
+TwistedFate,Burst Mage,0,2,1,0,1,0,1,0,0,1,0
+Twitch,Marksman,3,0,1,0,0,1,0,0,0,0,1
+Udyr,Juggernaut,1,1,0,0,0,1,1,0,0,0,0
+Urgot,Juggernaut,3,0,0,0,1,0,1,0,1,0,0
+Varus,"Marksman, Artillery",2,1,0,1,0,0,1,1,0,1,0
+Vayne,Marksman,3,0,1,0,0,1,1,0,1,0,0
+Veigar,Burst Mage,0,3,1,0,0,1,1,0,1,0,1
+Velkoz,Artillery,0,3,1,1,1,0,1,0,0,1,1
+Vex,Burst Mage,0,3,1,1,0,0,1,1,1,0,1
+Vi,Diver,2,0,0,0,0,1,1,1,0,0,0
+Viego,Skirmisher,3,0,0,0,1,0,0,1,0,0,0
+Viktor,Battlemage,0,3,1,0,0,1,1,0,1,1,1
+Vladimir,Battlemage,0,3,1,0,0,1,0,0,0,0,0
+Volibear,Juggernaut,1,1,0,1,0,0,1,1,0,0,0
+Warwick,Diver,1,1,0,1,0,0,1,1,0,0,0
+Xayah,Marksman,3,0,1,1,0,1,1,0,1,1,1
+Xerath,Artillery,0,3,1,0,1,0,1,0,0,1,1
+XinZhao,Diver,3,0,0,1,0,0,1,0,1,0,0
+Yasuo,Skirmisher,3,0,0,0,1,0,1,1,0,0,1
+Yone,"Assassin, Skirmisher",3,0,0,0,0,1,1,1,0,0,1
+Yorick,Juggernaut,2,1,0,0,1,0,0,0,0,0,0
+Yuumi,"Enchanter, Artillery",0,1,1,0,0,1,1,1,1,1,0
+Zac,Vanguard,0,1,0,0,0,1,1,1,0,0,0
+Zed,Assassin,3,0,0,1,0,1,0,0,0,1,1
+Zeri,Marksman,2,1,1,0,0,1,0,0,0,1,1
+Ziggs,Artillery,0,3,1,0,1,0,1,0,1,1,1
+Zilean,"Enchanter, Catcher",0,1,1,0,0,1,1,0,1,0,1
+Zoe,Burst Mage,0,3,1,1,0,0,1,0,0,1,0
+Zyra,Catcher,0,3,1,1,0,0,1,0,1,1,1

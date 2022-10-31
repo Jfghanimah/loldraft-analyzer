@@ -2,7 +2,7 @@ import json
 from riotwatcher import LolWatcher, ApiError
 
 
-lol_watcher = LolWatcher("RGAPI-b7cc8afd-b530-4e69-8893-a71e2240d9d1")
+lol_watcher = LolWatcher("RGAPI-9cd9f7ab-9125-4641-8820-990d1aa517d7")
 my_region = 'na1'
 
 
@@ -10,35 +10,38 @@ def open_matches():
     # Open saved info
     with open('save_data/match_ids.json') as f:
         match_ids = json.loads(f.read())
-    with open('save_data/match_info.json') as f:
-        match_info = json.loads(f.read())
     with open('save_data/match_ids_checked.json') as f:
         match_ids_checked = json.loads(f.read())
+    with open('save_data/match_info.json') as f:
+        match_info = json.loads(f.read())
 
     for i, match_id in enumerate(match_ids):
         print(f"Geting match data #{i} for: {match_id}")
         match = lol_watcher.match.by_id(my_region, match_id)
 
-        match_data = [match['info']['teams'][0]['win']]
+        # If the data is empty we will get an index error on the zero
+        try:
+            match_data = [match['info']['teams'][0]['win']]
+            for j in range(0,10):
+                champ_name =  match['info']['participants'][j]['championName']
+                match_data.append(champ_name)
+                match_info[match_id] = match_data
+        except IndexError:
+            continue
 
-        for i in range(0,10):
-            champ_name =  match['info']['participants'][i]['championName']
-            match_data.append(champ_name)
-
-        match_info[match_id] = match_data
         # Saved matchID as checked and Remove match_id from list of matches to check
         match_ids_checked.append(match_id)
         del match_ids[i]
 
-        if i%100 == 0:
+        if i % 100 == 0:
             print("saving data")
             # Save every 100 incase of error
-            with open('save_data/match_info.json', 'w') as f:
-                f.write(json.dumps(match_info))
             with open('save_data/match_ids.json', 'w') as f:
                 f.write(json.dumps(match_ids))
             with open('save_data/match_ids_checked.json', 'w') as f:
                 f.write(json.dumps(match_ids_checked))
+            with open('save_data/match_info.json', 'w') as f:
+                f.write(json.dumps(match_info))
 
 
 
