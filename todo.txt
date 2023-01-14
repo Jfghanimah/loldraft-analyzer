@@ -1,7 +1,2 @@
--- API STUFF --
-3. Start parsing the 79,000 match_ids (24 hours)
-
--- While wating for match_ids --
-4. Also puuids still not removed from puuids.json yet after read
-5. 3 damage model seems really cool, further investigate procomps.gg
+1. New model is ready, but how do i create teamcomps with crazy win percentages
 6. start drafting website?
