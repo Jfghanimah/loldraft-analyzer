@@ -1,2 +1,11 @@
-1. New model is ready, but how do i create teamcomps with crazy win percentages
-6. start drafting website?
+TODO:
+-predicting seems very expensive how do I fix?
+-New model is ready, but how do i create teamcomps with crazy win percentages?
+-start drafting website?
+-winrates seem very very reliant on patch meta how to diversify? 
+    -Compute the win rate for each champion by counting the number of wins and losses for each champion in the dataset.
+    -For each champion, calculate the number of games that need to be removed in order to achieve a 50% win rate.
+    -Remove a proportional number of wins and losses for each champion to balance their win rates.
+    -Repeat steps 1-3 until all champions have a win rate close to 50%.
+    -Once all champions have a win rate close to 50%, shuffle the rows of the dataframe to ensure that the data is randomized.
+    -Use this normalized and shuffled data to train your model.
