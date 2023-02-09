@@ -2,6 +2,8 @@ import json
 import pandas as pd
 import numpy as np
 
+import matplotlib.pyplot as plt
+
 
 
 def champion_winrates(df_matches):
@@ -10,11 +12,15 @@ def champion_winrates(df_matches):
 
     champ_winloss = {} # { champ_id:[wins, losses] }
     i = 0
-    for idx, row in df_matches.iterrows():
+    for _, win, b1, b2, b3, b4, b5, r1, r2, r3, r4, r5 in df_matches.itertuples():
+        i+=1
+        if i % 10000 == 0:
+            pass
+            #print(i)
 
-        win = row[0]
-        team_a = row[cols_a]
-        team_b = row[cols_b]
+        #win = row[0]
+        team_a = [b1, b2, b3, b4, b5]
+        team_b =  [r1, r2, r3, r4, r5]
         for champ_id in team_a:
             if champ_id not in champ_winloss:
                 champ_winloss[champ_id] = [0, 0]
@@ -36,53 +42,93 @@ def champion_winrates(df_matches):
         winrate = wins / (wins + losses)
         champ_winrates[champ] = round(winrate,4)
     sorted_champ_winrates = sorted(champ_winrates.items(), key=lambda x: x[1], reverse=True)
+
     return champ_winloss, sorted_champ_winrates
 
 
 def balance_winrates(df_matches):
-    # TODO: tally champ winrates and sort by highest to lowest
-    # currently runs, however it has a whack-a-mole issue of addressing high winrate champs
-    # save columns of players within the dataset
-    cols_a = [1, 2, 3, 4, 5]
-    cols_b = [6, 7, 8, 9, 10]
+    # TODO: this function works and is bug free but does not seem to improve bias 
+    # if Heimerdinger(#41) has 5500 wins and 5400 losses then we need to remove 100 games where ahri is on the winning team
+    # JUST DO FOR 1 CHAMPION FOR THE TIME BEING
+    # Doing this on multiple champions does not seem to work
 
-    # Step 1 - Compute the win rate for each champion
-    champ_win_loss, sorted_champ_winrates = champion_winrates(df_matches)
-    #print("\n", sorted_champ_winrates)
+    print("Balancing winrates of champions.....")
 
-    # Step 2 - calculate the number of games that need to be removed to get to 50%
-    wins_to_remove = {} # { champ_id : # of games to remove}
-    # for each champion in the winrates dictionary
-    for champ_id, wins_losses in champ_win_loss.items():
-        wins_to_remove[champ_id] = wins_losses[0] - wins_losses[1]
+    cols_blueteam = [1, 2, 3, 4, 5]
+    cols_redteam = [6, 7, 8, 9, 10]
 
-    print(f"\n Wins to remove: {wins_to_remove}")
+    deviations = []
+    len_matches = []
 
-    # Step 3 - Remove a number of wins (or losses if negative) for each champ respectively
-    total_remove = 0
-    for champ_id, games_to_remove in wins_to_remove.items():
-        if games_to_remove > 0:
-            total_remove += games_to_remove
-            # Dropping the last x matches where champion is on the winning team
-            # Get the indices of the rows where the champion is on the winning team
-            champion_win_indices = df_matches[(df_matches[cols_a].eq(champ_id).sum(1) > 0) & (df_matches[0] == True)].index
+    # Iterations of gimping/normalizing the most OP champion
+    for i in range(50): # ~100 Gets the variance of winrates down significantly without reducing total matches by much
+        # Step 1 - Compute the win rate for each champion and standard deviation
+        champ_win_loss, sorted_champ_winrates = champion_winrates(df_matches)
+        winrates = [x[1] for x in sorted_champ_winrates]
+        std_dev = np.std(winrates)
+        deviations.append(std_dev)
+        len_matches.append(len(df_matches))
+        #print(sorted_champ_winrates[0:10])    
+        #print(std_dev)
+        #print(len(df_matches), "\n")
+
+        # Step 2 - calculate the number of games that need to be removed (wins - losses)
+        #most_op_id = sorted_champ_winrates[0][0]
+        most_op_id = sorted_champ_winrates[0][0] if abs(sorted_champ_winrates[0][1] - 0.5) > abs(sorted_champ_winrates[-1][1] - 0.5) else sorted_champ_winrates[-1][0]
+        wins_to_remove = champ_win_loss[most_op_id][0] - champ_win_loss[most_op_id][1]
+
+        # Step 3 - Remove a number of wins (or losses if negative) for each champ respectively
+        if wins_to_remove > 0: 
+            champion_win_blue_idx = df_matches[(df_matches[cols_blueteam].eq(most_op_id).sum(1) > 0) & (df_matches[0] == True)].index            
+            champion_win_red_idx = df_matches[(df_matches[cols_redteam].eq(most_op_id).sum(1) > 0) & (df_matches[0] == False)].index
             # Drop the last `games_to_remove` matches where the champion is on the winning team
-            df_matches = df_matches.drop(champion_win_indices[-games_to_remove:])
+            df_matches = df_matches.drop(champion_win_blue_idx[0:int(wins_to_remove/4)])
+            df_matches = df_matches.drop(champion_win_red_idx[0:int(wins_to_remove/4)])
+        elif wins_to_remove < 0: #Its really losses to remove now
+            losses_to_remove = -wins_to_remove
+            champion_lose_blue_idx = df_matches[(df_matches[cols_blueteam].eq(most_op_id).sum(1) > 0) & (df_matches[0] == False)].index            
+            champion_lose_red_idx = df_matches[(df_matches[cols_redteam].eq(most_op_id).sum(1) > 0) & (df_matches[0] == True)].index
+            # Drop the last `games_to_remove` matches where the champion is on the losing team
+            df_matches = df_matches.drop(champion_lose_blue_idx[0:int(losses_to_remove/4)])
+            df_matches = df_matches.drop(champion_lose_red_idx[0:int(losses_to_remove/4)])
 
-    print("\n Total Remove: ",total_remove)
-    print("\n", df_matches)
-    # Step 4 pray that somehow the winrates are much closer to 50%
+
+    # Step 1 again to check the end result
     champ_win_loss, sorted_champ_winrates = champion_winrates(df_matches)
-    for champ_id, wins_losses in champ_win_loss.items():
-        wins_to_remove[champ_id] = wins_losses[0] - wins_losses[1]
+    winrates = [x[1] for x in sorted_champ_winrates]
+    std_dev = np.std(winrates)
+    #print(sorted_champ_winrates[0:10])    
+    #print(std_dev)
+    #print(len(df_matches), "\n")
 
-    print(f"\n Wins to remove: {wins_to_remove}")
+    #plots to analyze how many iterations of normalization to run
+    '''
+    x_vals = range(len(deviations))
+    y1_values = deviations
+    y2_values = len_matches
+
+    fig, (ax1, ax2) = plt.subplots(nrows=1, ncols=2, figsize=(10,5))
+    ax1.plot(x_vals, y1_values, label='Winrate spread')
+    ax1.set_ylim(0, 0.017)
+    ax1.set_xlabel('X values')
+    ax1.set_ylabel('y1 values')
+    ax1.legend()
+
+    ax2.plot(x_vals, y2_values, label='Matches left')
+    ax2.set_ylim(0, 150000)
+    ax2.set_xlabel('X values')
+    ax2.set_ylabel('y2 values')
+    ax2.legend()
+    plt.show()
+    quit()
+    '''
 
     return df_matches
 
 
 
 def preprocess_data(matches):
+    print("Preprocessing Data...")
     #sample_match = [True, 'Mordekaiser', 'Trundle', 'Viktor', 'Ezreal', 'Sona', 'Volibear', 'Warwick', 'Veigar', 'Caitlyn', 'Lux']
     
     # Read the champion list from the champion_list.json file
@@ -102,8 +148,8 @@ def preprocess_data(matches):
     cols_a = [1, 2, 3, 4, 5]
     cols_b = [6, 7, 8, 9, 10]
 
-    # Remove matches to balace the overall winrates of each champ to remove bias
-    # df_matches = balance_winrates(df_matches)   
+    # Remove some matches to balace the overall winrates of outlier champs to remove bias and improve training?
+    # df_matches = balance_winrates(df_matches)   #doesnt really help at all
 
     # ----- PERMUTATION OF TWO TEAMS doubles dataset (also balances total wins and losses so model doesnt guess blindly)
     df_swapped = df_matches.copy()
@@ -119,7 +165,7 @@ def preprocess_data(matches):
     df_matches = df_matches.iloc[indices]
 
     # Split the DataFrame into a training set and a test set 
-    stopping_point = round(length*0.95) #make it automatically use 95% of it for training?
+    stopping_point = round(length*0.90) #make it automatically use 90% of it for training?
     df_train = df_matches.iloc[:stopping_point, :]
     df_test = df_matches.iloc[stopping_point:, :]
 

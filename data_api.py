@@ -2,7 +2,7 @@ import sys
 import json
 from riotwatcher import LolWatcher, ApiError
 
-lol_watcher = LolWatcher("RGAPI-8fac5ad9-4fe3-4257-9876-0f1b7712e40a")
+lol_watcher = LolWatcher("RGAPI-4084ad1e-81cf-4f1f-972b-362106c05c0d")
 my_region = 'na1'
 
 
@@ -72,9 +72,8 @@ def get_more_match_ids():
     print(f"Geting match history for each puuid, count:{len(puuids)}")
     try:
         for i, puuid in enumerate(puuids):
-            print(f"#{i} Getting match history from: {puuid}")
-            players_matches = lol_watcher.match.matchlist_by_puuid(
-                my_region, puuid, queue=420, type="ranked", count=100)
+            players_matches = lol_watcher.match.matchlist_by_puuid(my_region, puuid, start_time=1672000000, queue=420, type="ranked", count=100)
+            print(f"#{i} Adding match history from: {puuid} - Matches: {len(players_matches)}")
 
             for new_match_id in players_matches:
                 if new_match_id not in match_ids_checked:
