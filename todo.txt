@@ -1,11 +1,20 @@
 TODO:
+- total matches = 328k
+
+-Generally the recommendation is to use the teamPosition field over the individualPosition field.
 -predicting seems very expensive how do I fix?
 -New model is ready, but how do i create teamcomps with crazy win percentages?
 -start drafting website?
--winrates seem very very reliant on patch meta how to diversify? 
-    -Compute the win rate for each champion by counting the number of wins and losses for each champion in the dataset.
-    -For each champion, calculate the number of games that need to be removed in order to achieve a 50% win rate.
-    -Remove a proportional number of wins and losses for each champion to balance their win rates.
-    -Repeat steps 1-3 until all champions have a win rate close to 50%.
-    -Once all champions have a win rate close to 50%, shuffle the rows of the dataframe to ensure that the data is randomized.
-    -Use this normalized and shuffled data to train your model.
+
+In Champ Select (teammates are hidden so all we see is what champ they pick):
+    Winner (What we are predicting)
+    Champion [10] (There are 10 champions)
+
+In Loading Screen (We now see the actual players associated with the champions):
+    Winner (What we are predicting)
+    Champion [10]
+    Rank [10] (What to do if missing? Average?)
+    Mastery [10]
+    Challenge [10] (Idk if this is important)
+    Days since last game [10] (how warm this player might be)
+    Days since last 10 games [10]

@@ -1,8 +1,15 @@
 import sys
 import json
+import os
 from riotwatcher import LolWatcher, ApiError
+from dotenv import load_dotenv
 
-lol_watcher = LolWatcher("RGAPI-4084ad1e-81cf-4f1f-972b-362106c05c0d")
+load_dotenv()
+RIOT_API_KEY = os.getenv("RIOT_API_KEY")
+if not RIOT_API_KEY:
+    raise ValueError("RIOT_API_KEY not found in .env file")
+
+lol_watcher = LolWatcher(RIOT_API_KEY)
 my_region = 'na1'
 
 

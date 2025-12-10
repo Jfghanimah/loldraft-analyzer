@@ -2,9 +2,6 @@ import json
 import pandas as pd
 import numpy as np
 
-import matplotlib.pyplot as plt
-
-
 
 def champion_winrates(df_matches):
     cols_a = [1, 2, 3, 4, 5]
@@ -101,27 +98,6 @@ def balance_winrates(df_matches):
     #print(std_dev)
     #print(len(df_matches), "\n")
 
-    #plots to analyze how many iterations of normalization to run
-    '''
-    x_vals = range(len(deviations))
-    y1_values = deviations
-    y2_values = len_matches
-
-    fig, (ax1, ax2) = plt.subplots(nrows=1, ncols=2, figsize=(10,5))
-    ax1.plot(x_vals, y1_values, label='Winrate spread')
-    ax1.set_ylim(0, 0.017)
-    ax1.set_xlabel('X values')
-    ax1.set_ylabel('y1 values')
-    ax1.legend()
-
-    ax2.plot(x_vals, y2_values, label='Matches left')
-    ax2.set_ylim(0, 150000)
-    ax2.set_xlabel('X values')
-    ax2.set_ylabel('y2 values')
-    ax2.legend()
-    plt.show()
-    quit()
-    '''
 
     return df_matches
 
@@ -143,7 +119,6 @@ def preprocess_data(matches):
 
     # Create a pandas DataFrame from the matches dictionary
     df_matches = pd.DataFrame.from_dict(matches_converted, orient='index')
-    #print(df_matches.head())
     # save columns of players within the dataset
     cols_a = [1, 2, 3, 4, 5]
     cols_b = [6, 7, 8, 9, 10]
@@ -151,7 +126,7 @@ def preprocess_data(matches):
     # Remove some matches to balace the overall winrates of outlier champs to remove bias and improve training?
     # df_matches = balance_winrates(df_matches)   #doesnt really help at all
 
-    # ----- PERMUTATION OF TWO TEAMS doubles dataset (also balances total wins and losses so model doesnt guess blindly)
+    # ----- PERMUTATION OF TWO TEAMS doubles dataset
     df_swapped = df_matches.copy()
     df_swapped[cols_a], df_swapped[cols_b] = df_matches[cols_b], df_matches[cols_a]
     # need to swap the wins and losses
