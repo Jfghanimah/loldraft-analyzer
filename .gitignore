@@ -133,3 +133,11 @@ dmypy.json
 *.h5
 *.db
 *.sqlite
+*.db-shm
+*.db-wal
+
+# Claude Code internals
+.claude/
+
+# Scratch files
+test_permissions.txt
