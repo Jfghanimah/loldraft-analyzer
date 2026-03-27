@@ -39,14 +39,20 @@ def main():
     parser.add_argument(
         '--finetune-patience',
         type=int,
-        default=8,
-        help='Early stopping patience for Phase 2 based on validation loss (default: 8)',
+        default=12,
+        help='Early stopping patience for Phase 2 based on validation loss (default: 12)',
     )
     parser.add_argument(
         '--finetune-min-delta',
         type=float,
         default=1e-4,
         help='Minimum validation-loss improvement to reset Phase 2 early stopping (default: 1e-4)',
+    )
+    parser.add_argument(
+        '--finetune-min-epochs',
+        type=int,
+        default=20,
+        help='Minimum number of Phase 2 epochs before early stopping can trigger (default: 20)',
     )
     parser.add_argument(
         '--finetune-lr-patience',
@@ -76,6 +82,7 @@ def main():
             epochs=args.finetune_epochs,
             early_stopping_patience=args.finetune_patience,
             early_stopping_min_delta=args.finetune_min_delta,
+            min_epochs_before_stopping=args.finetune_min_epochs,
             scheduler_patience=args.finetune_lr_patience,
             scheduler_factor=args.finetune_lr_factor,
         )

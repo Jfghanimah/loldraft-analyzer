@@ -15,8 +15,9 @@ def run_finetune(
     batch_size=1024,
     epochs=40,
     lr=5e-4,
-    early_stopping_patience=8,
+    early_stopping_patience=12,
     early_stopping_min_delta=1e-4,
+    min_epochs_before_stopping=20,
     scheduler_patience=3,
     scheduler_factor=0.5,
     scheduler_min_lr=1e-5,
@@ -155,13 +156,14 @@ def run_finetune(
         scheduler.step(avg_val_loss)
         next_lr = optimizer.param_groups[0]['lr']
         if next_lr < previous_lr:
+            epochs_without_improvement = 0
             print(f"--> Reduced learning rate to {next_lr:.6f}")
 
-        if epochs_without_improvement >= early_stopping_patience:
+        if (epoch + 1) >= min_epochs_before_stopping and epochs_without_improvement >= early_stopping_patience:
             print(
                 f"--> Early stopping after {epoch+1} epochs "
                 f"(no val-loss improvement greater than {early_stopping_min_delta:.1e} "
-                f"for {early_stopping_patience} epochs)."
+                f"for {early_stopping_patience} epochs after at least {min_epochs_before_stopping} epochs)."
             )
             break
 
