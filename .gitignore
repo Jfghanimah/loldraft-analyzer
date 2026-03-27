@@ -103,6 +103,7 @@ celerybeat.pid
 
 # Environments
 .env
+.env.local
 .venv
 env/
 venv/
@@ -130,3 +131,5 @@ dmypy.json
 
 
 *.h5
+*.db
+*.sqlite

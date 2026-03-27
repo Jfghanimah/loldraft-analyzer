@@ -1,0 +1,30 @@
+{
+  "batch_size": 50,
+  "queue_id": 420,
+  "start_time": 1772323200,
+  "status_interval_sec": 60,
+  "targets": [
+    {
+      "platform": "na1",
+      "region": "americas",
+      "seed_name": "DrDoughnut",
+      "seed_tag": "GGG"
+    },
+    {
+      "platform": "euw1",
+      "region": "europe",
+      "seed_name": "Agurin",
+      "seed_tag": "DND"
+    },
+    {
+      "platform": "kr",
+      "region": "asia",
+      "seed_name": "Hide on bush",
+      "seed_tag": "KR1"
+    }
+  ],
+  "rank_snapshots": {
+    "enabled": false,
+    "ttl_seconds": 21600
+  }
+}

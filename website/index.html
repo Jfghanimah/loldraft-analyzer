@@ -1,0 +1,158 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>LoL Draft Analyzer</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+
+  <header>
+    <h1>Draft Analyzer</h1>
+    <p class="subtitle">Predict win probability from champion draft</p>
+  </header>
+
+  <main>
+
+    <!-- ── Live Game Lookup ─────────────────────────────────────── -->
+    <section class="card lookup-section">
+      <h2>Live Game Lookup <span class="badge stub">Stub</span></h2>
+      <div class="lookup-row">
+        <input id="input-name" type="text" placeholder="Game Name" autocomplete="off" />
+        <span class="tag-sep">#</span>
+        <input id="input-tag" type="text" placeholder="TAG" maxlength="5" autocomplete="off" />
+        <select id="input-region">
+          <option value="na1">NA</option>
+          <option value="euw1">EUW</option>
+          <option value="kr">KR</option>
+          <option value="eun1">EUNE</option>
+          <option value="br1">BR</option>
+          <option value="jp1">JP</option>
+        </select>
+        <button id="btn-lookup" class="btn-primary">Find Live Game</button>
+      </div>
+      <div class="demo-row">
+        <button id="btn-demo" class="btn-secondary btn-demo">Feeling Lucky?</button>
+        <span class="demo-hint">load a random match from the database</span>
+      </div>
+      <div class="status-row">
+        <p id="lookup-status" class="status-msg"></p>
+        <button id="btn-retry" class="btn-ghost btn-retry" hidden>Retry</button>
+      </div>
+    </section>
+
+    <!-- ── Draft Board ──────────────────────────────────────────── -->
+    <section class="card draft-section">
+      <div class="draft-header">
+        <h2>Draft Board</h2>
+        <button id="btn-clear" class="btn-ghost" title="Clear all picks and bans">Clear</button>
+      </div>
+
+      <!-- Bans -->
+      <div class="bans-row">
+        <div class="ban-group" id="blue-bans"></div>
+        <span class="bans-label">Bans</span>
+        <div class="ban-group" id="red-bans"></div>
+      </div>
+
+      <!-- Picks -->
+      <div class="draft-grid">
+
+        <div class="team blue-team">
+          <div class="team-header">Blue Side</div>
+          <div class="slots" id="blue-slots"></div>
+        </div>
+
+        <div class="prediction-panel">
+          <div id="prediction-result" class="prediction-empty">
+            <span>Fill the draft<br/>and click <strong>Analyze</strong></span>
+          </div>
+
+          <div class="action-row">
+            <button id="btn-analyze" class="btn-primary btn-analyze">Analyze</button>
+            <button id="btn-share"   class="btn-secondary" title="Copy share link">Share</button>
+          </div>
+
+          <div class="side-toggle">
+            <label>
+              <input type="checkbox" id="chk-blue-side" checked />
+              Blue side perspective
+            </label>
+          </div>
+        </div>
+
+        <div class="team red-team">
+          <div class="team-header">Red Side</div>
+          <div class="slots" id="red-slots"></div>
+        </div>
+
+      </div>
+    </section>
+
+    <!-- ── Analysis Cards ───────────────────────────────────────── -->
+    <section class="analysis-section">
+
+      <div class="card analysis-card">
+        <h3>Lane Matchups</h3>
+        <div class="lane-rows" id="lane-matchups">
+          <p class="placeholder-text">Analyze a draft to see per-lane breakdowns.</p>
+        </div>
+      </div>
+
+      <div class="card analysis-card">
+        <h3>Champion Synergies <span class="badge todo">TODO</span></h3>
+        <p class="placeholder-text">
+          Intra-team synergy pairs from cosine similarity in embedding space.
+          Wire <code>tests/check_embeddings.py</code> logic to a <code>/api/synergies</code> endpoint.
+        </p>
+      </div>
+
+      <div class="card analysis-card">
+        <h3>Draft Strengths</h3>
+        <div id="draft-strengths" class="draft-strengths">
+          <p class="placeholder-text">Analyze a draft to see composition breakdown.</p>
+        </div>
+      </div>
+
+      <div class="card analysis-card">
+        <h3>Player Context <span class="badge todo">TODO</span></h3>
+        <p class="placeholder-text">
+          Rank, mastery, KDA per player from live game data.
+          Needs <code>summoner-v4</code>, <code>league-v4</code>, and <code>champion-mastery-v4</code> calls.
+        </p>
+      </div>
+
+    </section>
+
+    <!-- ── Analyze History ──────────────────────────────────────────── -->
+    <details id="history-section" class="card history-section" hidden>
+      <summary class="history-summary">
+        <span class="history-title">Recent Analyses</span>
+        <button id="btn-history-clear" class="btn-ghost" type="button">Clear</button>
+      </summary>
+      <div id="history-list" class="history-list"></div>
+    </details>
+
+  </main>
+
+  <!-- ── Champion Picker Modal ────────────────────────────────────────────── -->
+  <div id="picker-modal" class="modal-overlay" hidden aria-modal="true" role="dialog">
+    <div class="modal-box">
+      <div class="modal-header">
+        <span id="picker-title" class="modal-title">Select Champion</span>
+        <button id="btn-picker-close" class="modal-close" aria-label="Close">&times;</button>
+      </div>
+      <input id="picker-search" class="picker-search" type="text"
+             placeholder="Search champions…" autocomplete="off" spellcheck="false" />
+      <div id="picker-filters" class="picker-filters"></div>
+      <div id="picker-grid" class="picker-grid">
+        <!-- tiles injected by JS after champion list loads -->
+        <p class="picker-empty-msg">Loading champions…</p>
+      </div>
+    </div>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>

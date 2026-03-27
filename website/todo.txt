@@ -1,0 +1,74 @@
+WEBSITE TODO
+
+Detailed plan lives in the repo-root ROADMAP.MD. This file is the short execution queue.
+
+--- PRIORITY 1: Live Game Lookup ---
+
+[ ] Implement get_live_game() in server.py:
+    1. riot_watcher.account.by_riot_id(routing, name, tag) -> PUUID
+    2. lol_watcher.summoner.by_puuid(platform, puuid) -> summonerId
+    3. lol_watcher.spectator.by_summoner(platform, summonerId) -> participants
+    - Sort by position field (TOP/JUNGLE/MIDDLE/BOTTOM/UTILITY); fallback preserves slot order
+    - Return: { in_game, blue_team, red_team, blue_players, red_players, player_team, blue_puuids, red_puuids }
+    - Include PUUIDs in response so frontend can pass them to /api/predict for dense features
+
+[ ] Auto-refresh during champion select:
+    - Poll /api/live-game every 30s after game loads
+    - Re-run prediction if picks change
+    - Stop polling once all 10 slots are locked
+    - Clearable on manual edit or page close
+
+[ ] Wire the richer player-aware predictor path into the website/API:
+    - Send aligned 10-slot PUUID arrays to /api/predict when live-game data is available
+    - Preserve champ-only fallback when players/PUUIDs are missing
+    - Surface neutral/partial-data behavior cleanly in the UI so spotty live data does not feel broken
+
+--- PRIORITY 2: Rate Limit + Caching ---
+
+[ ] Token-bucket rate limiter in front of all Riot API calls
+    - Parse Retry-After on 429 and surface wait time to user
+    - Queue simultaneous live game lookups
+
+[ ] In-process dict TTL cache:
+    - Live game: 30s TTL
+    - Summoner/rank lookups: 10m TTL
+    - Champion list + embeddings: indefinite until model retrained
+
+--- PRIORITY 3: Analysis Cards ---
+
+[ ] Champion Synergies (/api/synergies):
+    - Input: champion name list
+    - Output: top-N similar teammates + top-N stylistic counters (cosine sim in embedding space)
+    - Logic exists in ml/predictor/tests/check_embeddings.py — wire to endpoint
+    - Frontend: highlight synergy pairs; dim stylistically distant pairs
+
+[ ] Composition Archetype Tags:
+    - Quick path: pull DDragon tags from champion.json, count per team, show dominant archetypes as pills
+    - ML path (later): k-means on embeddings -> save champion_archetypes.json -> server tags compositions
+
+[ ] Player Context Panel (defer until API budget confirmed):
+    - league-v4 for rank/LP
+    - champion-mastery-v4 for mastery level on picked champion
+    - Cache per-player 10m; pre-fetch during draft loading
+
+--- PRIORITY 4: UX Polish ---
+
+[ ] Role filters in champion picker modal (Top/Jgl/Mid/Bot/Sup filter buttons)
+[ ] Analyze history — last 5-10 predictions in localStorage, collapsible drawer
+[ ] Mobile layout fix: stack blue -> prediction -> red vertically; sticky Analyze button
+[ ] Skeleton/loading states + specific error messages (not in game, summoner not found, rate limited, model missing) + retry button
+
+--- PRIORITY 5: Infrastructure ---
+
+[ ] Model hot-reload: watch save_data/best_win_predictor.pth mtime; reload weights without restart
+    - Safe after retraining — server auto-detects architecture from checkpoint weight shapes
+[ ] Deployment path: add --host 0.0.0.0 for LAN; Dockerfile for cloud; CORS scope for split deploy
+
+--- DEFERRED / NICE-TO-HAVE ---
+
+- Opponent suggestion mode (counter-pick ranker)
+- Blind pick helper (win delta by remaining pick)
+- Embedding explorer (2D UMAP scatter)
+- Match history integration (predicted vs actual)
+- WebSocket live update (replace polling)
+- Dark/light theme toggle
