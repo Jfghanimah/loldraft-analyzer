@@ -3,14 +3,17 @@ ML TODO
 Keep this file short.
 Use repo-root ROADMAP.MD for the bigger plan.
 
-1. Establish and record a trustworthy baseline from the current training pipeline.
-2. Profile training throughput on the 2080 Ti and explain the low GPU-usage cases.
-3. Tighten local CUDA and training environment docs so setup is repeatable.
-4. Continue improving the unified best-shot training pipeline with current data before expanding feature scope.
-5. Revisit side-aware training assumptions and compare them against the old swap behavior.
-6. Evaluate the best existing-data feature ideas next:
-strict positional inputs
-lane interaction refinements
-masking and regularization improvements
-simple baseline model comparison
-7. Keep rank and other expensive player-context features deferred until we have a production-safe plan.
+1. Keep the unified model path clean and understandable.
+2. Delete or quarantine old pretrain/sequence branches once the unified path is stable enough.
+3. Keep pre-match safety strict: no future info, no post-game-only labels disguised as inputs.
+4. Add train-split-only normalization stats for unified continuous inputs instead of relying only on bounded scaling.
+5. Rework evaluation to be trustworthy for the real target:
+temporal validation
+multi-seed comparisons
+calibration-aware metrics
+6. Tune the unified model first:
+dropout
+batch size ceiling
+hidden width
+7. Replace the in-memory SQLite training build with streamed Parquet shards and an IterableDataset once data volume grows further.
+8. Defer rank and other external player metadata until we have a production-safe and non-leaky plan.

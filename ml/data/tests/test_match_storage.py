@@ -24,11 +24,17 @@ def test_ensure_match_schema_adds_richer_columns(tmp_path):
     assert "rank_snapshot_json" in columns
     assert "game_version" in columns
     assert "queue_id" in columns
+    assert "blue_first_blood" in columns
+    assert "blue_first_tower" in columns
+    assert "blue_dragon_share" in columns
+    assert "blue_gold_share" in columns
     assert "last_updated_ts" in columns
     participant_columns = {row[1] for row in conn.execute("PRAGMA table_info(participant_history)").fetchall()}
     assert "puuid" in participant_columns
     assert "champion_name" in participant_columns
     assert "role" in participant_columns
+    assert "gold_earned" in participant_columns
+    assert "cs" in participant_columns
     conn.close()
 
 
@@ -50,24 +56,43 @@ def test_upsert_match_record_persists_raw_and_ordered_payloads(tmp_path):
         "metadata": {"matchId": "NA1_1"},
         "info": {
             "gameVersion": "15.1.1",
-                "queueId": 420,
-                "gameCreation": 123456,
-                "gameEndTimestamp": 123999,
-                "teams": [{"teamId": 100, "win": True}, {"teamId": 200, "win": False}],
-                "participants": [
-                {"teamId": 100, "puuid": "p1", "championName": "Aatrox", "teamPosition": "TOP", "individualPosition": "TOP"},
-                {"teamId": 100, "puuid": "p2", "championName": "Amumu", "teamPosition": "JUNGLE", "individualPosition": "JUNGLE"},
-                {"teamId": 100, "puuid": "p3", "championName": "Ahri", "teamPosition": "MIDDLE", "individualPosition": "MIDDLE"},
-                {"teamId": 100, "puuid": "p4", "championName": "Ashe", "teamPosition": "BOTTOM", "individualPosition": "BOTTOM"},
-                {"teamId": 100, "puuid": "p5", "championName": "Braum", "teamPosition": "UTILITY", "individualPosition": "UTILITY"},
-                {"teamId": 200, "puuid": "p6", "championName": "Renekton", "teamPosition": "TOP", "individualPosition": "TOP"},
-                {"teamId": 200, "puuid": "p7", "championName": "LeeSin", "teamPosition": "JUNGLE", "individualPosition": "JUNGLE"},
-                {"teamId": 200, "puuid": "p8", "championName": "Lux", "teamPosition": "MIDDLE", "individualPosition": "MIDDLE"},
-                {"teamId": 200, "puuid": "p9", "championName": "Jinx", "teamPosition": "BOTTOM", "individualPosition": "BOTTOM"},
-                {"teamId": 200, "puuid": "p10", "championName": "Nami", "teamPosition": "UTILITY", "individualPosition": "UTILITY"},
-                ],
-            },
-        }
+            "queueId": 420,
+            "gameCreation": 123456,
+            "gameEndTimestamp": 123999,
+            "teams": [
+                {
+                    "teamId": 100,
+                    "win": True,
+                    "objectives": {
+                        "champion": {"first": True},
+                        "tower": {"first": True},
+                        "dragon": {"kills": 3},
+                    },
+                },
+                {
+                    "teamId": 200,
+                    "win": False,
+                    "objectives": {
+                        "champion": {"first": False},
+                        "tower": {"first": False},
+                        "dragon": {"kills": 1},
+                    },
+                },
+            ],
+            "participants": [
+                {"teamId": 100, "puuid": "p1", "championName": "Aatrox", "teamPosition": "TOP", "individualPosition": "TOP", "goldEarned": 10000},
+                {"teamId": 100, "puuid": "p2", "championName": "Amumu", "teamPosition": "JUNGLE", "individualPosition": "JUNGLE", "goldEarned": 11000},
+                {"teamId": 100, "puuid": "p3", "championName": "Ahri", "teamPosition": "MIDDLE", "individualPosition": "MIDDLE", "goldEarned": 12000},
+                {"teamId": 100, "puuid": "p4", "championName": "Ashe", "teamPosition": "BOTTOM", "individualPosition": "BOTTOM", "goldEarned": 13000},
+                {"teamId": 100, "puuid": "p5", "championName": "Braum", "teamPosition": "UTILITY", "individualPosition": "UTILITY", "goldEarned": 14000},
+                {"teamId": 200, "puuid": "p6", "championName": "Renekton", "teamPosition": "TOP", "individualPosition": "TOP", "goldEarned": 9000},
+                {"teamId": 200, "puuid": "p7", "championName": "LeeSin", "teamPosition": "JUNGLE", "individualPosition": "JUNGLE", "goldEarned": 9500},
+                {"teamId": 200, "puuid": "p8", "championName": "Lux", "teamPosition": "MIDDLE", "individualPosition": "MIDDLE", "goldEarned": 9800},
+                {"teamId": 200, "puuid": "p9", "championName": "Jinx", "teamPosition": "BOTTOM", "individualPosition": "BOTTOM", "goldEarned": 10000},
+                {"teamId": 200, "puuid": "p10", "championName": "Nami", "teamPosition": "UTILITY", "individualPosition": "UTILITY", "goldEarned": 10200},
+            ],
+        },
+    }
     ordered = {
         "format": "role_order_v1",
         "blue_win": True,
@@ -84,11 +109,15 @@ def test_upsert_match_record_persists_raw_and_ordered_payloads(tmp_path):
     upsert_match_record(conn, "NA1_1", payload)
 
     row = conn.execute(
-        "SELECT region, raw_match_json, ordered_match_json, rank_snapshot_json, game_version, queue_id FROM matches WHERE match_id = ?",
+        """
+        SELECT region, raw_match_json, ordered_match_json, rank_snapshot_json, game_version, queue_id,
+               blue_first_blood, blue_first_tower, blue_dragon_share, blue_gold_share
+        FROM matches WHERE match_id = ?
+        """,
         ("NA1_1",),
     ).fetchone()
     participant_rows = conn.execute(
-        "SELECT puuid, champion_name, role, team_id, win FROM participant_history WHERE match_id = ? ORDER BY team_id, role",
+        "SELECT puuid, champion_name, role, team_id, win, gold_earned, cs FROM participant_history WHERE match_id = ? ORDER BY team_id, role",
         ("NA1_1",),
     ).fetchall()
     conn.close()
@@ -99,8 +128,12 @@ def test_upsert_match_record_persists_raw_and_ordered_payloads(tmp_path):
     assert json.loads(row[3])[0]["tier"] == "EMERALD"
     assert row[4] == "15.1.1"
     assert row[5] == 420
+    assert row[6] == 1
+    assert row[7] == 1
+    assert row[8] == 0.75
+    assert row[9] > 0.5
     assert len(participant_rows) == 10
-    assert participant_rows[0] == ("p4", "Ashe", "BOTTOM", 100, 1)
+    assert participant_rows[0] == ("p4", "Ashe", "BOTTOM", 100, 1, 13000.0, 0.0)
 
 
 def test_merge_matches_prefers_richer_incoming_row(tmp_path):

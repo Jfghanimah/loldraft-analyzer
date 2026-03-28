@@ -2,6 +2,10 @@
 
 This file gives repository-specific guidance to coding agents working in this project.
 
+## Concurrent Editing Warning
+
+Multiple agents and/or human users may be editing this workspace simultaneously. Use targeted edits (Edit tool) over full rewrites to minimize clobber risk. Be especially careful with shared state files: `ROADMAP.MD`, `todo.txt`, and SQLite databases.
+
 ## Source Of Truth
 
 - `ROADMAP.MD` is the main planning document.

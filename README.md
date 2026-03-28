@@ -1,6 +1,6 @@
 # LoL Draft Analyzer
 
-LoL Draft Analyzer is a PyTorch project for predicting League of Legends match outcomes from champion draft compositions. The codebase includes a SQLite-backed collection pipeline and a two-stage training setup built around champion-embedding pretraining plus win prediction.
+LoL Draft Analyzer is a PyTorch project for predicting League of Legends match outcomes from champion draft compositions. The codebase includes a SQLite-backed collection pipeline and one active unified ML training path built around ordered drafts plus recent player-history features.
 
 ## Setup
 
@@ -36,15 +36,14 @@ Scraper behavior is configured in `config/scraper.json`:
 
 ```bash
 python -m ml.trainer.train
-python -m ml.trainer.train --skip-pretrain
-python -m ml.trainer.train --pretrain-only
-
-python -m ml.trainer.pretrain_embeddings
-python -m ml.trainer.train_win_predictor
+python -m ml.trainer.train --finetune-epochs 80
+python -m ml.trainer.train --batch-size 2048
+python -m ml.trainer.train --dropout 0.40
 ```
 
-Phase 1 still learns champion embeddings from ordered drafts.
-Phase 2 now uses the single unified richer pre-match feature pipeline by default instead of maintaining a separate "basic vs rich" finetuning split.
+The default `python -m ml.trainer.train` path now uses the unified single-phase model.
+That model trains from scratch on ordered drafts plus recent player-history features.
+Older pretraining and sequence experiments still exist in the repo for reference, but they are no longer the main path.
 
 To train from a specific DB:
 

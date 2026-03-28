@@ -22,6 +22,7 @@ def run_finetune(
     scheduler_factor=0.5,
     scheduler_min_lr=1e-5,
     pretrained_path='ml/save_data/pretrained_champ_embeddings.pth',
+    use_pretrained_embeddings=False,
     save_path='ml/save_data/best_win_predictor.pth',
 ):
     device = 'cuda' if torch.cuda.is_available() else 'mps' if torch.backends.mps.is_available() else 'cpu'
@@ -48,13 +49,11 @@ def run_finetune(
         num_champions=num_champions,
         embedding_dim=embedding_dim,
         num_layers=2,
-        dropout=0.3,
-        embedding_dropout=0.1,
-        dense_feature_dropout=0.1,
+        dropout=0.4,
         extra_feature_dim=(df_matches.shape[1] - 12),
     ).to(device)
 
-    if os.path.exists(pretrained_path):
+    if use_pretrained_embeddings and os.path.exists(pretrained_path):
         print(f"Loading pre-trained embeddings from '{pretrained_path}'...")
         try:
             pretrained = torch.load(pretrained_path, map_location=device)
@@ -72,8 +71,10 @@ def run_finetune(
                 "Re-run Phase 1 so the embedding file is rebuilt against the updated mapping."
             ) from exc
         print("Embeddings loaded (unfrozen for fine-tuning).")
+    elif use_pretrained_embeddings:
+        print(f"WARNING: Requested pre-trained embeddings, but '{pretrained_path}' was not found. Training from scratch.")
     else:
-        print("WARNING: No pre-trained embeddings found. Training from scratch.")
+        print("[Phase 2] Training from scratch (single-phase baseline path).")
 
     criterion = nn.BCEWithLogitsLoss()
     optimizer = torch.optim.AdamW(model.parameters(), lr=lr, weight_decay=0.01)

@@ -47,6 +47,9 @@ def _participant(team_id, puuid, champion, role, win_stats_seed):
         "totalDamageDealtToChampions": 1000 + (100 * win_stats_seed),
         "totalHeal": 50 + win_stats_seed,
         "totalHealsOnTeammates": 5,
+        "goldEarned": 10000 + (500 * win_stats_seed),
+        "totalMinionsKilled": 150 + (10 * win_stats_seed),
+        "neutralMinionsKilled": 20 + win_stats_seed,
     }
 
 
@@ -126,8 +129,8 @@ def test_build_rich_feature_dataframe_generates_dense_features_from_prior_matche
         """
         INSERT INTO participant_history (
             match_id, puuid, queue_id, game_creation, champion_name, role, team_id, win,
-            kills, deaths, assists, vision_score, damage_to_champions, healing, game_version
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            kills, deaths, assists, vision_score, damage_to_champions, healing, gold_earned, cs, game_version
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """,
         [
             (
@@ -145,6 +148,8 @@ def test_build_rich_feature_dataframe_generates_dense_features_from_prior_matche
                 p["visionScore"],
                 p["totalDamageDealtToChampions"],
                 p["totalHeal"] + p["totalHealsOnTeammates"],
+                p["goldEarned"],
+                p["totalMinionsKilled"] + p["neutralMinionsKilled"],
                 "15.5.1",
             )
             for match_id, game_creation, participants in (
@@ -164,7 +169,7 @@ def test_build_rich_feature_dataframe_generates_dense_features_from_prior_matche
 
     assert len(df) == 2
     assert len(champion_list) >= 12
-    assert df.shape[1] == 164
+    assert df.shape[1] == 184
 
     dense_columns = list(df.columns[12:])
     dense_sums = sorted(float(df.iloc[i][dense_columns].sum()) for i in range(len(df)))
@@ -185,14 +190,14 @@ def test_build_dense_features_for_prediction_uses_recent_prior_rows_only(tmp_pat
         """
         INSERT INTO participant_history (
             match_id, puuid, queue_id, game_creation, champion_name, role, team_id, win,
-            kills, deaths, assists, vision_score, damage_to_champions, healing, game_version
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            kills, deaths, assists, vision_score, damage_to_champions, healing, gold_earned, cs, game_version
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """,
         [
-            ("NA1_1", "p1", 420, 100, "Aatrox", "TOP", 100, 1, 4, 2, 5, 20.0, 2000.0, 80.0, "15.5.1"),
-            ("NA1_2", "p1", 420, 200, "Garen", "TOP", 100, 0, 1, 4, 2, 10.0, 1000.0, 40.0, "15.5.1"),
-            ("NA1_3", "p1", 420, 500, "Aatrox", "TOP", 100, 1, 6, 1, 7, 25.0, 2500.0, 120.0, "15.5.1"),
-            ("NA1_4", "p1", 420, 900, "Darius", "TOP", 100, 1, 8, 3, 4, 30.0, 3000.0, 140.0, "15.5.1"),
+            ("NA1_1", "p1", 420, 100, "Aatrox", "TOP", 100, 1, 4, 2, 5, 20.0, 2000.0, 80.0, 12000.0, 200.0, "15.5.1"),
+            ("NA1_2", "p1", 420, 200, "Garen", "TOP", 100, 0, 1, 4, 2, 10.0, 1000.0, 40.0, 9000.0, 150.0, "15.5.1"),
+            ("NA1_3", "p1", 420, 500, "Aatrox", "TOP", 100, 1, 6, 1, 7, 25.0, 2500.0, 120.0, 13500.0, 230.0, "15.5.1"),
+            ("NA1_4", "p1", 420, 900, "Darius", "TOP", 100, 1, 8, 3, 4, 30.0, 3000.0, 140.0, 15000.0, 260.0, "15.5.1"),
         ],
     )
 
@@ -204,13 +209,13 @@ def test_build_dense_features_for_prediction_uses_recent_prior_rows_only(tmp_pat
     )
     conn.close()
 
-    assert len(features) == 152
+    assert len(features) == 172
     top_offset = 0
     games_played = features[top_offset]
     champ_games = features[top_offset + 2]
-    games_last_3d = features[top_offset + 10]
-    hours_since_last = features[top_offset + 12]
-    unique_champions = features[top_offset + 13]
+    games_last_3d = features[top_offset + 12]
+    hours_since_last = features[top_offset + 14]
+    unique_champions = features[top_offset + 15]
     patch_major = features[-2]
     patch_minor = features[-1]
 
@@ -299,8 +304,8 @@ def test_training_and_prediction_share_recent_history_feature_values(tmp_path):
         """
         INSERT INTO participant_history (
             match_id, puuid, queue_id, game_creation, champion_name, role, team_id, win,
-            kills, deaths, assists, vision_score, damage_to_champions, healing, game_version
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            kills, deaths, assists, vision_score, damage_to_champions, healing, gold_earned, cs, game_version
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """,
         [
             (
@@ -318,6 +323,8 @@ def test_training_and_prediction_share_recent_history_feature_values(tmp_path):
                 p["visionScore"],
                 p["totalDamageDealtToChampions"],
                 p["totalHeal"] + p["totalHealsOnTeammates"],
+                p["goldEarned"],
+                p["totalMinionsKilled"] + p["neutralMinionsKilled"],
                 "15.5.1",
             )
             for match_id, game_creation, participants in (

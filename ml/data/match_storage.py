@@ -19,6 +19,10 @@ MATCH_COLUMNS = {
     "queue_id": "INTEGER",
     "game_creation": "INTEGER",
     "game_end_timestamp": "INTEGER",
+    "blue_first_blood": "INTEGER",
+    "blue_first_tower": "INTEGER",
+    "blue_dragon_share": "REAL",
+    "blue_gold_share": "REAL",
     "last_updated_ts": "INTEGER",
 }
 PARTICIPANT_HISTORY_BACKFILL_BATCH_ROWS = 10000
@@ -58,6 +62,8 @@ def _participant_history_insert_values(participant_rows):
             row["vision_score"],
             row["damage_to_champions"],
             row["healing"],
+            row["gold_earned"],
+            row["cs"],
             row["game_version"],
         )
         for row in participant_rows
@@ -71,8 +77,8 @@ def _insert_participant_history_rows(conn: sqlite3.Connection, participant_rows)
         """
         INSERT INTO participant_history (
             match_id, puuid, queue_id, game_creation, champion_name, role, team_id, win,
-            kills, deaths, assists, vision_score, damage_to_champions, healing, game_version
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            kills, deaths, assists, vision_score, damage_to_champions, healing, gold_earned, cs, game_version
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """,
         _participant_history_insert_values(participant_rows),
     )
@@ -176,11 +182,21 @@ def ensure_participant_history_schema(conn: sqlite3.Connection):
             vision_score REAL,
             damage_to_champions REAL,
             healing REAL,
+            gold_earned REAL,
+            cs REAL,
             game_version TEXT,
             PRIMARY KEY (match_id, puuid)
         )
         """
     )
+    existing = {
+        row[1]
+        for row in conn.execute("PRAGMA table_info(participant_history)").fetchall()
+    }
+    if "gold_earned" not in existing:
+        conn.execute("ALTER TABLE participant_history ADD COLUMN gold_earned REAL")
+    if "cs" not in existing:
+        conn.execute("ALTER TABLE participant_history ADD COLUMN cs REAL")
     _create_participant_history_indexes(conn)
 
 
@@ -221,6 +237,11 @@ def extract_participant_history_rows(match):
                     (participant.get("totalHeal", 0.0) or 0.0)
                     + (participant.get("totalHealsOnTeammates", 0.0) or 0.0)
                 ),
+                "gold_earned": float(participant.get("goldEarned", 0.0) or 0.0),
+                "cs": float(
+                    (participant.get("totalMinionsKilled", 0.0) or 0.0)
+                    + (participant.get("neutralMinionsKilled", 0.0) or 0.0)
+                ),
                 "game_version": info.get("gameVersion", ""),
             }
         )
@@ -228,11 +249,48 @@ def extract_participant_history_rows(match):
     return rows if len(rows) == 10 else []
 
 
+def extract_auxiliary_outcome_features(match):
+    info = match.get("info", {})
+    teams = {team.get("teamId"): team for team in info.get("teams", [])}
+    blue_team = teams.get(100, {})
+    red_team = teams.get(200, {})
+    blue_objectives = blue_team.get("objectives", {})
+    red_objectives = red_team.get("objectives", {})
+
+    def _objective(team_objectives, objective_name, key, default):
+        return team_objectives.get(objective_name, {}).get(key, default)
+
+    blue_dragons = float(_objective(blue_objectives, "dragon", "kills", 0) or 0)
+    red_dragons = float(_objective(red_objectives, "dragon", "kills", 0) or 0)
+    total_dragons = blue_dragons + red_dragons
+    blue_dragon_share = blue_dragons / total_dragons if total_dragons > 0 else 0.5
+
+    blue_gold = 0.0
+    red_gold = 0.0
+    for participant in info.get("participants", []):
+        team_id = int(participant.get("teamId", 0) or 0)
+        gold = float(participant.get("goldEarned", 0.0) or 0.0)
+        if team_id == 100:
+            blue_gold += gold
+        elif team_id == 200:
+            red_gold += gold
+    total_gold = blue_gold + red_gold
+    blue_gold_share = blue_gold / total_gold if total_gold > 0 else 0.5
+
+    return {
+        "blue_first_blood": int(bool(_objective(blue_objectives, "champion", "first", False))),
+        "blue_first_tower": int(bool(_objective(blue_objectives, "tower", "first", False))),
+        "blue_dragon_share": float(blue_dragon_share),
+        "blue_gold_share": float(blue_gold_share),
+    }
+
+
 def extract_storage_payload(match, region, ordered_match_data, collector_id="", rank_snapshots=None):
     info = match["info"]
     now_ts = int(time.time())
     ordered_json = json.dumps(ordered_match_data) if ordered_match_data is not None else None
     rank_snapshot_json = json.dumps(rank_snapshots) if rank_snapshots is not None else None
+    auxiliary_outcomes = extract_auxiliary_outcome_features(match)
     legacy_projection = json.dumps(
         [bool(info["teams"][0]["win"])] + [participant["championName"] for participant in info["participants"]]
     )
@@ -249,6 +307,10 @@ def extract_storage_payload(match, region, ordered_match_data, collector_id="", 
         "queue_id": info.get("queueId"),
         "game_creation": info.get("gameCreation"),
         "game_end_timestamp": info.get("gameEndTimestamp"),
+        "blue_first_blood": auxiliary_outcomes["blue_first_blood"],
+        "blue_first_tower": auxiliary_outcomes["blue_first_tower"],
+        "blue_dragon_share": auxiliary_outcomes["blue_dragon_share"],
+        "blue_gold_share": auxiliary_outcomes["blue_gold_share"],
         "last_updated_ts": now_ts,
         "participant_history_rows": extract_participant_history_rows(match),
     }
@@ -270,8 +332,12 @@ def upsert_match_record(conn: sqlite3.Connection, match_id: str, payload: dict):
             queue_id,
             game_creation,
             game_end_timestamp,
+            blue_first_blood,
+            blue_first_tower,
+            blue_dragon_share,
+            blue_gold_share,
             last_updated_ts
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         ON CONFLICT(match_id) DO UPDATE SET
             match_data = excluded.match_data,
             region = excluded.region,
@@ -284,6 +350,10 @@ def upsert_match_record(conn: sqlite3.Connection, match_id: str, payload: dict):
             queue_id = excluded.queue_id,
             game_creation = excluded.game_creation,
             game_end_timestamp = excluded.game_end_timestamp,
+            blue_first_blood = excluded.blue_first_blood,
+            blue_first_tower = excluded.blue_first_tower,
+            blue_dragon_share = excluded.blue_dragon_share,
+            blue_gold_share = excluded.blue_gold_share,
             last_updated_ts = excluded.last_updated_ts
         """,
         (
@@ -299,6 +369,10 @@ def upsert_match_record(conn: sqlite3.Connection, match_id: str, payload: dict):
             payload["queue_id"],
             payload["game_creation"],
             payload["game_end_timestamp"],
+            payload["blue_first_blood"],
+            payload["blue_first_tower"],
+            payload["blue_dragon_share"],
+            payload["blue_gold_share"],
             payload["last_updated_ts"],
         ),
     )
@@ -322,6 +396,7 @@ def rebuild_participant_history(
     participants_inserted = 0
     started_at = time.time()
     buffered_rows = []
+    auxiliary_rows = []
     if progress_callback:
         progress_callback(
             processed=0,
@@ -346,6 +421,7 @@ def rebuild_participant_history(
         for index, (raw_json,) in enumerate(rows, start=1):
             match = json.loads(raw_json)
             participant_rows = extract_participant_history_rows(match)
+            auxiliary_outcomes = extract_auxiliary_outcome_features(match)
             if not participant_rows:
                 if progress_callback and (index % progress_update_every == 0 or index == total_rows):
                     progress_callback(
@@ -360,9 +436,31 @@ def rebuild_participant_history(
             participants_inserted += len(participant_rows)
             matches_processed += 1
             buffered_rows.extend(participant_rows)
+            auxiliary_rows.append(
+                (
+                    auxiliary_outcomes["blue_first_blood"],
+                    auxiliary_outcomes["blue_first_tower"],
+                    auxiliary_outcomes["blue_dragon_share"],
+                    auxiliary_outcomes["blue_gold_share"],
+                    match.get("metadata", {}).get("matchId"),
+                )
+            )
             if len(buffered_rows) >= PARTICIPANT_HISTORY_BACKFILL_BATCH_ROWS:
                 _insert_participant_history_rows(conn, buffered_rows)
                 buffered_rows.clear()
+            if len(auxiliary_rows) >= PARTICIPANT_HISTORY_BACKFILL_BATCH_ROWS:
+                conn.executemany(
+                    """
+                    UPDATE matches
+                    SET blue_first_blood = ?,
+                        blue_first_tower = ?,
+                        blue_dragon_share = ?,
+                        blue_gold_share = ?
+                    WHERE match_id = ?
+                    """,
+                    auxiliary_rows,
+                )
+                auxiliary_rows.clear()
 
             if progress_callback and (index % progress_update_every == 0 or index == total_rows):
                 progress_callback(
@@ -376,6 +474,18 @@ def rebuild_participant_history(
 
         if buffered_rows:
             _insert_participant_history_rows(conn, buffered_rows)
+        if auxiliary_rows:
+            conn.executemany(
+                """
+                UPDATE matches
+                SET blue_first_blood = ?,
+                    blue_first_tower = ?,
+                    blue_dragon_share = ?,
+                    blue_gold_share = ?
+                WHERE match_id = ?
+                """,
+                auxiliary_rows,
+            )
     finally:
         _create_participant_history_indexes(conn)
 

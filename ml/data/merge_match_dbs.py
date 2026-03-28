@@ -55,8 +55,12 @@ def merge_matches(target_conn, source_conn):
                 queue_id,
                 game_creation,
                 game_end_timestamp,
+                blue_first_blood,
+                blue_first_tower,
+                blue_dragon_share,
+                blue_gold_share,
                 last_updated_ts
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT(match_id) DO UPDATE SET
                 match_data = excluded.match_data,
                 region = excluded.region,
@@ -69,6 +73,10 @@ def merge_matches(target_conn, source_conn):
                 queue_id = excluded.queue_id,
                 game_creation = excluded.game_creation,
                 game_end_timestamp = excluded.game_end_timestamp,
+                blue_first_blood = excluded.blue_first_blood,
+                blue_first_tower = excluded.blue_first_tower,
+                blue_dragon_share = excluded.blue_dragon_share,
+                blue_gold_share = excluded.blue_gold_share,
                 last_updated_ts = excluded.last_updated_ts
             """,
             (
@@ -84,6 +92,10 @@ def merge_matches(target_conn, source_conn):
                 row["queue_id"],
                 row["game_creation"],
                 row["game_end_timestamp"],
+                row["blue_first_blood"],
+                row["blue_first_tower"],
+                row["blue_dragon_share"],
+                row["blue_gold_share"],
                 row["last_updated_ts"],
             ),
         )

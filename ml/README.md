@@ -6,15 +6,17 @@ Important context:
 
 - The current goal is to improve model quality on existing data before expanding collection again.
 - The active scraper currently collects match payloads and ordered draft projections only.
-- The active fine-tuning path uses a single richer pre-match feature pipeline by default.
+- The active ML path is now one unified single-phase model.
+- It trains from scratch on ordered drafts plus recent player-history features.
+- Older pretrain and sequence experiments still exist in the repo, but they are not the main path.
 - Humans should launch meaningful training runs for now.
 - The repo-root `ROADMAP.MD` is the big-picture plan. `ml/todo.txt` is the short local working list for ML-specific tasks.
 
 Project structure:
 
 - `data/`: SQLite collection, storage helpers, merge utilities, and dataset loading
-- `trainer/`: training entry points and feature-building code
-- `predictor/`: PyTorch model definitions
+- `trainer/`: active unified training entry point plus older experiment scripts
+- `predictor/`: PyTorch model definitions, including the active unified model
 - `z_leagacy_save_data/`: saved checkpoints and champion mappings
 - `runtime_config.py`: shared scraper/runtime config loading
 
@@ -22,12 +24,13 @@ Useful entry points:
 
 - `py -m ml.data.data_api_sqlite`
 - `py -m ml.trainer.train`
-- `py -m ml.trainer.train --skip-pretrain --finetune-epochs 80`
-- `py -m ml.trainer.train --skip-pretrain --finetune-epochs 80 --finetune-patience 10`
+- `py -m ml.trainer.train --finetune-epochs 80`
+- `py -m ml.trainer.train --batch-size 2048`
+- `py -m ml.trainer.train --dropout 0.40`
 
 If you are new here, start with:
 
 1. repo-root `ROADMAP.MD`
 2. `ml/todo.txt`
 3. `ml/trainer/train.py`
-4. `ml/data/data_api_sqlite.py`
+4. `ml/predictor/unified_model.py`

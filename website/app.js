@@ -1,7 +1,5 @@
 // ── Constants ──────────────────────────────────────────────────────────────
-const ROLES       = ['Top', 'Jgl', 'Mid', 'Bot', 'Sup'];
-const HISTORY_KEY = 'loldraft-history';
-const HISTORY_MAX = 10;
+const ROLES = ['Top', 'Jgl', 'Mid', 'Bot', 'Sup'];
 
 // DDragon names that differ from the canonical champion name
 const DDRAGON_SPECIAL = {
@@ -148,7 +146,7 @@ function buildSlots(containerId, team) {
       </button>
       <span class="slot-role">${role}</span>
       <input id="slot-${team}-${i}" class="slot-input" type="text"
-             placeholder="${role}…" autocomplete="off" spellcheck="false" />
+             autocomplete="off" spellcheck="false" />
     `;
     wrap.appendChild(slot);
 
@@ -160,7 +158,6 @@ function buildSlots(containerId, team) {
       <span class="rank-badge"    id="rank-${team}-${i}"></span>
       <span class="mastery-badge" id="mastery-${team}-${i}"></span>
       <span class="champ-wr"      id="wr-${team}-${i}"></span>
-      <span class="champ-kda"     id="kda-${team}-${i}"></span>
     `;
     wrap.appendChild(statsRow);
     container.appendChild(wrap);
@@ -178,18 +175,17 @@ function setPlayerName(team, i, name) {
   if (el) el.textContent = name ?? '';
 }
 
-function setPlayerStats(team, i, { rank, mastery, wr, games, kda } = {}) {
+function setPlayerStats(team, i, { rank, mastery, wr, games } = {}) {
   const statsEl   = $(`stats-${team}-${i}`);
   const rankEl    = $(`rank-${team}-${i}`);
   const masteryEl = $(`mastery-${team}-${i}`);
   const wrEl      = $(`wr-${team}-${i}`);
-  const kdaEl     = $(`kda-${team}-${i}`);
   if (!statsEl) return;
 
-  const hasData = rank || mastery != null || wr != null || kda;
+  const hasData = rank || mastery != null || wr != null;
   if (!hasData) {
     statsEl.setAttribute('hidden', '');
-    [rankEl, masteryEl, wrEl, kdaEl].forEach(el => { if (el) el.textContent = ''; });
+    [rankEl, masteryEl, wrEl].forEach(el => { if (el) el.textContent = ''; });
     return;
   }
 
@@ -204,9 +200,6 @@ function setPlayerStats(team, i, { rank, mastery, wr, games, kda } = {}) {
   }
   if (wr != null) {
     wrEl.textContent = games != null ? `${wr}% · ${games}g` : `${wr}%`;
-  }
-  if (kda && kdaEl) {
-    kdaEl.textContent = kda;
   }
   statsEl.removeAttribute('hidden');
 }
@@ -386,6 +379,7 @@ function clearAll() {
   });
   $('lane-matchups').innerHTML = '<p class="placeholder-text">Analyze a draft to see per-lane breakdowns.</p>';
   $('draft-strengths').innerHTML = '<p class="placeholder-text">Analyze a draft to see composition breakdown.</p>';
+  $('analysis-section').setAttribute('hidden', '');
   $('prediction-result').className = 'prediction-empty';
   $('prediction-result').innerHTML = '<span>Fill the draft<br/>and click <strong>Analyze</strong></span>';
   setStatus('');
@@ -493,70 +487,6 @@ function renderDraftStrengths() {
   container.innerHTML = teamHTML('blue', picks.blue) + teamHTML('red', picks.red);
 }
 
-// ── Analyze History ────────────────────────────────────────────────────────
-function timeAgo(ts) {
-  const m = Math.floor((Date.now() - ts) / 60000);
-  if (m < 1)  return 'just now';
-  if (m < 60) return `${m}m ago`;
-  const h = Math.floor(m / 60);
-  if (h < 24) return `${h}h ago`;
-  return new Date(ts).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-}
-
-function saveToHistory(result) {
-  let history = [];
-  try { history = JSON.parse(localStorage.getItem(HISTORY_KEY) ?? '[]'); } catch {}
-  history.unshift({
-    ts:         Date.now(),
-    bd:         ROLES.map((_, i) => getSlot('blue', i)),
-    rd:         ROLES.map((_, i) => getSlot('red',  i)),
-    bb:         ROLES.map((_, i) => getBan('blue', i)),
-    rb:         ROLES.map((_, i) => getBan('red',  i)),
-    bluePct:    result.blue_win_probability,
-    confidence: result.confidence,
-  });
-  if (history.length > HISTORY_MAX) history.length = HISTORY_MAX;
-  localStorage.setItem(HISTORY_KEY, JSON.stringify(history));
-  renderHistory();
-}
-
-function renderHistory() {
-  let history = [];
-  try { history = JSON.parse(localStorage.getItem(HISTORY_KEY) ?? '[]'); } catch {}
-
-  const section = $('history-section');
-  const list    = $('history-list');
-  if (!section || !list) return;
-
-  if (!history.length) { section.setAttribute('hidden', ''); return; }
-  section.removeAttribute('hidden');
-
-  list.innerHTML = '';
-  history.forEach(entry => {
-    const pct    = (entry.bluePct * 100).toFixed(1);
-    const winner = entry.bluePct >= 0.5 ? 'blue' : 'red';
-    const label  = winner === 'blue' ? `Blue ${pct}%` : `Red ${(100 - parseFloat(pct)).toFixed(1)}%`;
-
-    const row = document.createElement('div');
-    row.className = 'history-entry';
-    row.title     = 'Click to restore this draft';
-    row.innerHTML = `
-      <span class="history-time">${timeAgo(entry.ts)}</span>
-      <div class="history-teams">
-        <span class="history-team-picks blue">${entry.bd.filter(Boolean).join(', ') || '—'}</span>
-        <span class="history-vs">vs</span>
-        <span class="history-team-picks red">${entry.rd.filter(Boolean).join(', ') || '—'}</span>
-      </div>
-      <span class="history-prob ${winner}">${label}</span>
-    `;
-    row.addEventListener('click', () => {
-      clearAll();
-      fillDraft({ blue_team: entry.bd, red_team: entry.rd, blue_bans: entry.bb, red_bans: entry.rb });
-      runPrediction();
-    });
-    list.appendChild(row);
-  });
-}
 
 function renderLaneMatchups(lane_scores) {
   const container = $('lane-matchups');
@@ -566,11 +496,12 @@ function renderLaneMatchups(lane_scores) {
     const bluePct  = ((score + 1) / 2 * 100); // 0–100, 50 = even
     const isBlue   = score >= 0;
     const side     = isBlue ? 'blue' : 'red';
-    const adv      = isBlue ? bluePct : (100 - bluePct);
-    const label    = Math.abs(score) < 0.05
-      ? 'Even'
-      : `${isBlue ? 'Blue' : 'Red'} ${adv.toFixed(0)}%`;
-    const labelCls = Math.abs(score) < 0.05 ? '' : side;
+    const abs      = Math.abs(score);
+    const label    = abs < 0.20 ? 'Even'
+      : abs < 0.55 ? `Slight ${isBlue ? 'Blue' : 'Red'}`
+      : abs < 0.75 ? `${isBlue ? 'Blue' : 'Red'}`
+      : `Strong ${isBlue ? 'Blue' : 'Red'}`;
+    const labelCls = abs < 0.20 ? '' : side;
 
     const row = document.createElement('div');
     row.className = 'lane-row';
@@ -612,6 +543,7 @@ function renderResult({ blue_win_probability, red_win_probability, confidence, l
   `;
   if (lane_scores) renderLaneMatchups(lane_scores);
   renderDraftStrengths();
+  $('analysis-section').removeAttribute('hidden');
 }
 
 async function runPrediction() {
@@ -643,7 +575,6 @@ async function runPrediction() {
       return;
     }
     renderResult(data);
-    saveToHistory(data);
     setStatus('');
     history.replaceState(null, '', '?' + new URLSearchParams(new URL(buildShareUrl()).search));
   } catch {
@@ -732,11 +663,6 @@ async function init() {
   // Event listeners
   $('btn-lookup').addEventListener('click', handleLookup);
   $('btn-retry').addEventListener('click', () => { if (_retryFn) _retryFn(); });
-  $('btn-history-clear').addEventListener('click', e => {
-    e.stopPropagation();
-    localStorage.removeItem(HISTORY_KEY);
-    renderHistory();
-  });
   $('btn-demo').addEventListener('click', handleDemo);
   $('btn-analyze').addEventListener('click', runPrediction);
   $('btn-share').addEventListener('click', handleShare);
@@ -757,8 +683,6 @@ async function init() {
 
   // Restore from URL if present (after champions are loaded so icons render)
   loadFromUrl();
-  // Render history (shows drawer if entries exist)
-  renderHistory();
 }
 
 document.addEventListener('DOMContentLoaded', init);

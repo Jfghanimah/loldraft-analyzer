@@ -21,10 +21,11 @@ def _seed_model_with_known_preferences():
     )
     model.eval()
     with torch.no_grad():
+        model.head.weight.zero_()
         model.head.bias.zero_()
-        model.head.bias[5] = 8.0
-        model.head.bias[6] = 7.0
-        model.head.bias[7] = 6.0  # MASK token should be filtered out
+        model.head.bias[5] = 12.0
+        model.head.bias[6] = 11.0
+        model.head.bias[7] = 10.0  # MASK token should be filtered out
     return model
 
 

@@ -23,6 +23,7 @@ load_runtime_env()
 DEFAULT_DB_PATH = get_db_path()
 PROGRESS_UPDATE_EVERY = 1000
 PROGRESS_BAR_WIDTH = 24
+HISTORY_PROGRESS_UPDATE_EVERY = 25000
 
 
 def _load_champion_list(champion_path):
@@ -78,10 +79,10 @@ def _load_training_matches(conn, queue_id):
 
 def _load_participant_history_rows_by_match(conn, queue_id):
     try:
-        rows = conn.execute(
+        cursor = conn.execute(
             """
             SELECT match_id, puuid, champion_name, role, win, kills, deaths, assists,
-                   vision_score, damage_to_champions, healing, game_creation, team_id
+                   vision_score, damage_to_champions, healing, gold_earned, cs, game_creation, team_id
             FROM participant_history
             WHERE (? IS NULL OR queue_id = ?)
             ORDER BY COALESCE(game_creation, 0), match_id, team_id,
@@ -95,12 +96,15 @@ def _load_participant_history_rows_by_match(conn, queue_id):
                      END
             """,
             (queue_id, queue_id),
-        ).fetchall()
+        )
     except sqlite3.OperationalError:
         return {}
 
     rows_by_match = {}
-    for row in rows:
+    total_rows = 0
+    started_at = time.time()
+    for row in cursor:
+        total_rows += 1
         rows_by_match.setdefault(row[0], []).append(
             {
                 "puuid": row[1],
@@ -113,10 +117,18 @@ def _load_participant_history_rows_by_match(conn, queue_id):
                 "vision_score": row[8],
                 "damage_to_champions": row[9],
                 "healing": row[10],
-                "game_creation": row[11],
-                "team_id": row[12],
+                "gold_earned": row[11],
+                "cs": row[12],
+                "game_creation": row[13],
+                "team_id": row[14],
             }
         )
+        if total_rows % HISTORY_PROGRESS_UPDATE_EVERY == 0:
+            elapsed = time.time() - started_at
+            _print_phase_status(
+                f"Loaded {total_rows:,} participant-history rows across "
+                f"{len(rows_by_match):,} matches in {_format_duration(elapsed)}..."
+            )
     return rows_by_match
 
 
@@ -133,6 +145,17 @@ def _build_dense_features_from_rows(participant_rows, history_store, current_gam
         )
     feature_values.extend(parse_patch(game_version))
     return feature_values
+
+
+def _format_duration(seconds):
+    if seconds < 60:
+        return f"{seconds:.1f}s"
+    minutes, remainder = divmod(int(seconds), 60)
+    return f"{minutes}m {remainder}s"
+
+
+def _print_phase_status(message):
+    print(f"[Phase 2] {message}", flush=True)
 
 
 def _print_feature_progress(processed, total, built_rows, fallback_rows, started_at, *, force=False):
@@ -218,7 +241,7 @@ def fetch_recent_history_rows(conn, puuid, current_game_creation, queue_id=QUEUE
         rows = conn.execute(
             """
             SELECT puuid, champion_name, role, win, kills, deaths, assists, vision_score,
-                   damage_to_champions, healing, game_creation
+                   damage_to_champions, healing, gold_earned, cs, game_creation
             FROM participant_history
             WHERE puuid = ?
               AND queue_id = ?
@@ -242,7 +265,9 @@ def fetch_recent_history_rows(conn, puuid, current_game_creation, queue_id=QUEUE
             "vision_score": row[7],
             "damage_to_champions": row[8],
             "healing": row[9],
-            "game_creation": row[10],
+            "gold_earned": row[10],
+            "cs": row[11],
+            "game_creation": row[12],
         }
         for row in rows
     ]

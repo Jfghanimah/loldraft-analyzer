@@ -252,15 +252,13 @@ def get_demo_game():
         game_name = p.get("riotIdGameName") or p.get("summonerName", "Unknown")
         tag       = p.get("riotIdTagline", "")
         display   = f"{game_name}#{tag}" if tag else game_name
-        k, d, a   = p.get("kills", 0), p.get("deaths", 0), p.get("assists", 0)
-
         if idx < 5:
             blue_players.append(display)
-            blue_stats.append({"kda": f"{k}/{d}/{a}"})
+            blue_stats.append({})
             blue_puuids.append(p.get("puuid"))
         else:
             red_players.append(display)
-            red_stats.append({"kda": f"{k}/{d}/{a}"})
+            red_stats.append({})
             red_puuids.append(p.get("puuid"))
 
     return {
@@ -370,7 +368,9 @@ def predict(req: PredictRequest):
             w_lane = w[:, lane_diff_start + i * d : lane_diff_start + (i + 1) * d]
             raw.append(float((w_lane @ lane_diffs[i]).sum().item()))
         max_abs = max(abs(s) for s in raw) or 1.0
-        lane_scores = [round(s / max_abs, 3) for s in raw]
+        # tanh(s/max_abs): max lane → ≈0.76, not ±1.0, so uniform advantages
+        # don't all collapse to "100%" on the frontend
+        lane_scores = [round(math.tanh(s / max_abs), 3) for s in raw]
 
     red_prob = 1.0 - blue_prob
     diff = abs(blue_prob - 0.5)

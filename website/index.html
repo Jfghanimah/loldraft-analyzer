@@ -17,7 +17,7 @@
 
     <!-- ── Live Game Lookup ─────────────────────────────────────── -->
     <section class="card lookup-section">
-      <h2>Live Game Lookup <span class="badge stub">Stub</span></h2>
+      <h2>Live Game Lookup</h2>
       <div class="lookup-row">
         <input id="input-name" type="text" placeholder="Game Name" autocomplete="off" />
         <span class="tag-sep">#</span>
@@ -34,7 +34,7 @@
       </div>
       <div class="demo-row">
         <button id="btn-demo" class="btn-secondary btn-demo">Feeling Lucky?</button>
-        <span class="demo-hint">load a random match from the database</span>
+        <span class="demo-hint">run the model on a random past match</span>
       </div>
       <div class="status-row">
         <p id="lookup-status" class="status-msg"></p>
@@ -91,7 +91,7 @@
     </section>
 
     <!-- ── Analysis Cards ───────────────────────────────────────── -->
-    <section class="analysis-section">
+    <section id="analysis-section" class="analysis-section" hidden>
 
       <div class="card analysis-card">
         <h3>Lane Matchups</h3>
@@ -101,38 +101,13 @@
       </div>
 
       <div class="card analysis-card">
-        <h3>Champion Synergies <span class="badge todo">TODO</span></h3>
-        <p class="placeholder-text">
-          Intra-team synergy pairs from cosine similarity in embedding space.
-          Wire <code>tests/check_embeddings.py</code> logic to a <code>/api/synergies</code> endpoint.
-        </p>
-      </div>
-
-      <div class="card analysis-card">
         <h3>Draft Strengths</h3>
         <div id="draft-strengths" class="draft-strengths">
           <p class="placeholder-text">Analyze a draft to see composition breakdown.</p>
         </div>
       </div>
 
-      <div class="card analysis-card">
-        <h3>Player Context <span class="badge todo">TODO</span></h3>
-        <p class="placeholder-text">
-          Rank, mastery, KDA per player from live game data.
-          Needs <code>summoner-v4</code>, <code>league-v4</code>, and <code>champion-mastery-v4</code> calls.
-        </p>
-      </div>
-
     </section>
-
-    <!-- ── Analyze History ──────────────────────────────────────────── -->
-    <details id="history-section" class="card history-section" hidden>
-      <summary class="history-summary">
-        <span class="history-title">Recent Analyses</span>
-        <button id="btn-history-clear" class="btn-ghost" type="button">Clear</button>
-      </summary>
-      <div id="history-list" class="history-list"></div>
-    </details>
 
   </main>
 
