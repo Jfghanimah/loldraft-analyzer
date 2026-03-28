@@ -141,3 +141,4 @@ dmypy.json
 
 # Scratch files
 test_permissions.txt
+sequence_cache.pt
