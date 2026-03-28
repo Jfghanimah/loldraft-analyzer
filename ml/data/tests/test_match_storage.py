@@ -29,12 +29,16 @@ def test_ensure_match_schema_adds_richer_columns(tmp_path):
     assert "blue_dragon_share" in columns
     assert "blue_gold_share" in columns
     assert "last_updated_ts" in columns
+    match_indexes = {row[1] for row in conn.execute("PRAGMA index_list(matches)").fetchall()}
+    assert "idx_matches_queue_game_match" in match_indexes
     participant_columns = {row[1] for row in conn.execute("PRAGMA table_info(participant_history)").fetchall()}
     assert "puuid" in participant_columns
     assert "champion_name" in participant_columns
     assert "role" in participant_columns
     assert "gold_earned" in participant_columns
     assert "cs" in participant_columns
+    participant_indexes = {row[1] for row in conn.execute("PRAGMA index_list(participant_history)").fetchall()}
+    assert "idx_participant_history_queue_game_match_team" in participant_indexes
     conn.close()
 
 

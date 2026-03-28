@@ -25,6 +25,25 @@ MATCH_COLUMNS = {
     "blue_gold_share": "REAL",
     "last_updated_ts": "INTEGER",
 }
+MATCH_INDEXES = (
+    (
+        "idx_matches_queue_id",
+        "CREATE INDEX IF NOT EXISTS idx_matches_queue_id ON matches(queue_id)",
+    ),
+    (
+        "idx_matches_game_version",
+        "CREATE INDEX IF NOT EXISTS idx_matches_game_version ON matches(game_version)",
+    ),
+    (
+        "idx_matches_game_creation",
+        "CREATE INDEX IF NOT EXISTS idx_matches_game_creation ON matches(game_creation)",
+    ),
+    (
+        "idx_matches_queue_game_match",
+        "CREATE INDEX IF NOT EXISTS idx_matches_queue_game_match "
+        "ON matches(queue_id, game_creation, match_id)",
+    ),
+)
 PARTICIPANT_HISTORY_BACKFILL_BATCH_ROWS = 10000
 PARTICIPANT_HISTORY_INDEXES = (
     (
@@ -41,6 +60,11 @@ PARTICIPANT_HISTORY_INDEXES = (
         "idx_participant_history_puuid_role_game",
         "CREATE INDEX IF NOT EXISTS idx_participant_history_puuid_role_game "
         "ON participant_history(puuid, role, game_creation)",
+    ),
+    (
+        "idx_participant_history_queue_game_match_team",
+        "CREATE INDEX IF NOT EXISTS idx_participant_history_queue_game_match_team "
+        "ON participant_history(queue_id, game_creation, match_id, team_id)",
     ),
 )
 
@@ -86,6 +110,11 @@ def _insert_participant_history_rows(conn: sqlite3.Connection, participant_rows)
 
 def _create_participant_history_indexes(conn: sqlite3.Connection):
     for _, ddl in PARTICIPANT_HISTORY_INDEXES:
+        conn.execute(ddl)
+
+
+def _create_match_indexes(conn: sqlite3.Connection):
+    for _, ddl in MATCH_INDEXES:
         conn.execute(ddl)
 
 
@@ -137,9 +166,7 @@ def ensure_match_schema(conn: sqlite3.Connection):
         if column not in existing:
             conn.execute(f"ALTER TABLE matches ADD COLUMN {column} {column_type}")
 
-    conn.execute("CREATE INDEX IF NOT EXISTS idx_matches_queue_id ON matches(queue_id)")
-    conn.execute("CREATE INDEX IF NOT EXISTS idx_matches_game_version ON matches(game_version)")
-    conn.execute("CREATE INDEX IF NOT EXISTS idx_matches_game_creation ON matches(game_creation)")
+    _create_match_indexes(conn)
     ensure_participant_history_schema(conn)
 
 
@@ -197,6 +224,11 @@ def ensure_participant_history_schema(conn: sqlite3.Connection):
         conn.execute("ALTER TABLE participant_history ADD COLUMN gold_earned REAL")
     if "cs" not in existing:
         conn.execute("ALTER TABLE participant_history ADD COLUMN cs REAL")
+    _create_participant_history_indexes(conn)
+
+
+def ensure_training_read_indexes(conn: sqlite3.Connection):
+    _create_match_indexes(conn)
     _create_participant_history_indexes(conn)
 
 

@@ -1,3 +1,4 @@
+import gc
 import os
 import time
 
@@ -37,7 +38,14 @@ def run_unified_training(
     print(f"[Unified] Device: {device}")
     print("Loading pre-match training data...")
 
+    started_at = time.time()
+    print("[Unified] Building feature dataframe from SQLite matches...", flush=True)
     df_matches, champion_list = build_rich_feature_dataframe()
+    print(
+        f"[Unified] Feature dataframe ready in {time.time() - started_at:.1f}s "
+        f"({len(df_matches):,} rows x {len(df_matches.columns):,} columns)",
+        flush=True,
+    )
     actual_num_champions = len(champion_list)
     if num_champions is None:
         num_champions = actual_num_champions
@@ -47,9 +55,20 @@ def run_unified_training(
             f"{actual_num_champions} champions."
         )
 
-    dataset = LeagueDataset(df_matches, mode="finetune")
-    cache = GpuCache(dataset, device)
+    started_at = time.time()
+    print("[Unified] Converting feature dataframe to torch tensors...", flush=True)
     dense_feature_dim = max(df_matches.shape[1] - 12, 0)
+    dataset = LeagueDataset(df_matches, mode="finetune")
+    del df_matches
+    gc.collect()
+    print(f"[Unified] Torch dataset ready in {time.time() - started_at:.1f}s", flush=True)
+
+    started_at = time.time()
+    print(f"[Unified] Caching train/val tensors on {device}...", flush=True)
+    cache = GpuCache(dataset, device)
+    del dataset
+    gc.collect()
+    print(f"[Unified] Tensor cache ready in {time.time() - started_at:.1f}s", flush=True)
     print(f"[Unified] Champion vocab: {num_champions}")
     print(f"[Unified] Dense feature dim: {dense_feature_dim}")
     print(
