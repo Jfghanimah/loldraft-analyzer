@@ -128,6 +128,16 @@ Plan:
 - support multiple operators scraping independently with separate API keys
 - merge operator databases into a shared training DB on a manual cadence
 
+### Scraper / Training Coexistence
+
+The scraper should be able to run continuously in the background without colliding with training runs. SQLite WAL mode already allows concurrent readers and one writer, but the training pipeline needs to be verified safe to run alongside an active scraper.
+
+Plan:
+
+- verify the training pipeline opens the DB read-only (or at minimum never writes during a training run)
+- ensure the scraper uses WAL mode so training reads are not blocked by write commits
+- document the expected workflow: scraper runs persistently, training is launched on-demand against the current snapshot
+
 ### Side-Aware Data Pipeline
 
 The current dataset augmentation doubles data by swapping team perspectives. That helped bootstrap the model, but it also hides real game asymmetry.

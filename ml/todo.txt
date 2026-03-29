@@ -3,17 +3,41 @@ ML TODO
 Keep this file short.
 Use repo-root ROADMAP.MD for the bigger plan.
 
-1. Keep the unified model path clean and understandable.
-2. Delete or quarantine old pretrain/sequence branches once the unified path is stable enough.
-3. Keep pre-match safety strict: no future info, no post-game-only labels disguised as inputs.
-4. Add train-split-only normalization stats for unified continuous inputs instead of relying only on bounded scaling.
-5. Rework evaluation to be trustworthy for the real target:
-temporal validation
-multi-seed comparisons
-calibration-aware metrics
-6. Tune the unified model first:
+2. Keep pre-match safety strict:
+no future info in inputs
+post-game stats are allowed only as labels / auxiliary targets, never as inputs
+
+3. Redesign unified dense features before major model experimentation:
+done: replaced raw totals with pace-adjusted prior-game stats and prior average game length
+done: added region as context
+next: add stronger team-level and lane-level delta features instead of only slot-local aggregates
+next: revisit sparse-history defaults so neutral fallback values do not wash out signal
+add train-split-only normalization stats instead of relying only on bounded scaling
+
+4. Support multitask learning early if it is cheap to wire into the cached dataset:
+done: keep win/loss as the primary target
+done: added auxiliary targets for gold_diff, blue_dragons, red_dragons, and game_length_minutes
+next: verify they improve validation behavior and tune loss weights if needed
+
+5. Run ablations on the same exact dataset and split:
+champ-only baseline
+dense-only baseline
+champ + dense MLP baseline
+current transformer
+multitask vs win-only
+
+6. Keep the unified model path clean and understandable while tuning:
 dropout
 batch size ceiling
 hidden width
-7. Replace the in-memory SQLite training build with streamed Parquet shards and an IterableDataset once data volume grows further.
-8. Defer rank and other external player metadata until we have a production-safe and non-leaky plan.
+whether the transformer is actually beating a simpler MLP
+
+7. Once feature shape and target design are stable enough, add caching for fast iteration:
+cache the unified feature matrix / tensors
+avoid recaching every time we tweak the model head
+
+8. Done: removed old pretrain/sequence branches and old non-unified trainer paths.
+
+9. Replace the SQLite-to-RAM training build with cached shards / IterableDataset only if scale demands it again after caching.
+
+10. Defer rank and other external player metadata until we have a production-safe and non-leaky plan.

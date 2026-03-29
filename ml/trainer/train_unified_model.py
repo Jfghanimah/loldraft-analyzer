@@ -4,6 +4,7 @@ import time
 
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 
 from ml.data.pytorch_data import GpuCache, LeagueDataset
 from ml.predictor.unified_model import UnifiedWinPredictorModel
@@ -13,6 +14,22 @@ try:
     from torch.amp import GradScaler, autocast
 except ImportError:  # pragma: no cover
     from torch.cuda.amp import GradScaler, autocast  # type: ignore
+
+
+AUX_TARGET_SCALES = (25000.0, 6.0, 6.0, 45.0)
+AUX_TARGET_WEIGHTS = (0.25, 0.15, 0.15, 0.10)
+
+
+def _compute_multitask_losses(win_logits, aux_predictions, labels, aux_targets, criterion):
+    win_loss = criterion(win_logits, labels)
+    if aux_predictions is None or aux_targets is None:
+        return win_loss, win_loss.new_tensor(0.0)
+
+    scales = aux_targets.new_tensor(AUX_TARGET_SCALES)
+    weights = aux_targets.new_tensor(AUX_TARGET_WEIGHTS)
+    component_losses = F.smooth_l1_loss(aux_predictions / scales, aux_targets / scales, reduction="none").mean(dim=0)
+    aux_loss = torch.sum(component_losses * weights)
+    return win_loss + aux_loss, aux_loss
 
 
 def run_unified_training(
@@ -57,8 +74,9 @@ def run_unified_training(
 
     started_at = time.time()
     print("[Unified] Converting feature dataframe to torch tensors...", flush=True)
-    dense_feature_dim = max(df_matches.shape[1] - 12, 0)
     dataset = LeagueDataset(df_matches, mode="finetune")
+    dense_feature_dim = dataset.dense_features.shape[1] if dataset.dense_features is not None else 0
+    num_regions = int(dataset.region_ids.max().item()) + 1 if dataset.region_ids is not None and len(dataset.region_ids) else 1
     del df_matches
     gc.collect()
     print(f"[Unified] Torch dataset ready in {time.time() - started_at:.1f}s", flush=True)
@@ -70,6 +88,7 @@ def run_unified_training(
     gc.collect()
     print(f"[Unified] Tensor cache ready in {time.time() - started_at:.1f}s", flush=True)
     print(f"[Unified] Champion vocab: {num_champions}")
+    print(f"[Unified] Regions: {num_regions}")
     print(f"[Unified] Dense feature dim: {dense_feature_dim}")
     print(
         f"[Unified] Model: dim={embedding_dim}, heads={nhead}, layers={num_layers}, "
@@ -80,6 +99,7 @@ def run_unified_training(
     model = UnifiedWinPredictorModel(
         num_champions=num_champions,
         dense_feature_dim=dense_feature_dim,
+        num_regions=num_regions,
         embedding_dim=embedding_dim,
         nhead=nhead,
         dim_feedforward=dim_feedforward,
@@ -107,21 +127,30 @@ def run_unified_training(
         t0 = time.time()
         model.train()
         train_loss = 0.0
+        train_aux_loss = 0.0
         train_correct = 0
         train_total = 0
 
         for batch in cache.batches("train", batch_size):
             optimizer.zero_grad(set_to_none=True)
             with autocast(device_type="cuda", enabled=amp_enabled):
-                logits = model(
+                logits, aux_predictions = model(
                     batch["champion_ids"],
                     batch["role_ids"],
                     batch["team_ids"],
-                    batch["dense_features"],
-                    batch["blue_side"],
+                    dense_features=batch["dense_features"],
+                    blue_side=batch["blue_side"],
+                    region_ids=batch["region_ids"],
+                    return_aux=True,
                 )
                 labels = batch["label"]
-                loss = criterion(logits, labels)
+                loss, aux_loss = _compute_multitask_losses(
+                    logits,
+                    aux_predictions,
+                    labels,
+                    batch["aux_targets"],
+                    criterion,
+                )
 
             scaler.scale(loss).backward()
             scaler.unscale_(optimizer)
@@ -130,34 +159,47 @@ def run_unified_training(
             scaler.update()
 
             train_loss += loss.item()
+            train_aux_loss += aux_loss.item()
             preds = (torch.sigmoid(logits) > 0.5).float()
             train_correct += (preds == labels).sum().item()
             train_total += labels.size(0)
 
         model.eval()
         val_loss = 0.0
+        val_aux_loss = 0.0
         val_correct = 0
         val_total = 0
         with torch.no_grad():
             for batch in cache.batches("val", batch_size):
                 with autocast(device_type="cuda", enabled=amp_enabled):
-                    logits = model(
+                    logits, aux_predictions = model(
                         batch["champion_ids"],
                         batch["role_ids"],
                         batch["team_ids"],
-                        batch["dense_features"],
-                        batch["blue_side"],
+                        dense_features=batch["dense_features"],
+                        blue_side=batch["blue_side"],
+                        region_ids=batch["region_ids"],
+                        return_aux=True,
                     )
                     labels = batch["label"]
-                    loss = criterion(logits, labels)
+                    loss, aux_loss = _compute_multitask_losses(
+                        logits,
+                        aux_predictions,
+                        labels,
+                        batch["aux_targets"],
+                        criterion,
+                    )
 
                 val_loss += loss.item()
+                val_aux_loss += aux_loss.item()
                 preds = (torch.sigmoid(logits) > 0.5).float()
                 val_correct += (preds == labels).sum().item()
                 val_total += labels.size(0)
 
         avg_train_loss = train_loss / n_train_batches
         avg_val_loss = val_loss / n_val_batches
+        avg_train_aux_loss = train_aux_loss / n_train_batches
+        avg_val_aux_loss = val_aux_loss / n_val_batches
         train_acc = train_correct / train_total if train_total else 0.0
         val_acc = val_correct / val_total if val_total else 0.0
         current_lr = optimizer.param_groups[0]["lr"]
@@ -166,6 +208,8 @@ def run_unified_training(
             f"Epoch {epoch+1}/{epochs} | "
             f"Train Loss: {avg_train_loss:.4f} | "
             f"Val Loss: {avg_val_loss:.4f} | "
+            f"Train Aux: {avg_train_aux_loss:.4f} | "
+            f"Val Aux: {avg_val_aux_loss:.4f} | "
             f"Train Acc: {train_acc:.4f} | "
             f"Val Acc: {val_acc:.4f} | "
             f"LR: {current_lr:.6f} | "

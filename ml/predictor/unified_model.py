@@ -17,6 +17,7 @@ class UnifiedWinPredictorModel(nn.Module):
         self,
         num_champions,
         dense_feature_dim,
+        num_regions=1,
         embedding_dim=96,
         nhead=4,
         dim_feedforward=256,
@@ -28,6 +29,7 @@ class UnifiedWinPredictorModel(nn.Module):
         self.champ_emb = nn.Embedding(num_champions + 2, embedding_dim)
         self.role_emb = nn.Embedding(5, embedding_dim)
         self.team_emb = nn.Embedding(2, embedding_dim)
+        self.region_emb = nn.Embedding(max(num_regions, 1), embedding_dim)
 
         encoder_layer = nn.TransformerEncoderLayer(
             d_model=embedding_dim,
@@ -52,10 +54,10 @@ class UnifiedWinPredictorModel(nn.Module):
         else:
             self.dense_encoder = None
 
-        summary_dim = (4 * embedding_dim) + (5 * embedding_dim) + 1 + (
+        summary_dim = (5 * embedding_dim) + (5 * embedding_dim) + 1 + (
             dense_hidden_dim if dense_feature_dim > 0 else 0
         )
-        self.head = nn.Sequential(
+        self.win_head = nn.Sequential(
             nn.Linear(summary_dim, 256),
             nn.GELU(),
             nn.Dropout(dropout),
@@ -64,8 +66,14 @@ class UnifiedWinPredictorModel(nn.Module):
             nn.Dropout(dropout),
             nn.Linear(128, 1),
         )
+        self.aux_head = nn.Sequential(
+            nn.Linear(summary_dim, 128),
+            nn.GELU(),
+            nn.Dropout(dropout),
+            nn.Linear(128, 4),
+        )
 
-    def forward(self, champion_ids, role_ids, team_ids, dense_features=None, blue_side=None):
+    def forward(self, champion_ids, role_ids, team_ids, dense_features=None, blue_side=None, region_ids=None, return_aux=False):
         x = self.champ_emb(champion_ids) + self.role_emb(role_ids) + self.team_emb(team_ids)
         x = self.slot_norm(self.transformer(x))
 
@@ -84,7 +92,14 @@ class UnifiedWinPredictorModel(nn.Module):
             if blue_side.dim() == 1:
                 blue_side = blue_side.unsqueeze(1)
 
-        features = [global_pool, blue_pool, red_pool, team_gap, lane_diffs, blue_side]
+        if region_ids is None:
+            region_features = self.region_emb(
+                torch.zeros((x.size(0),), device=x.device, dtype=torch.long)
+            )
+        else:
+            region_features = self.region_emb(region_ids.to(device=x.device, dtype=torch.long))
+
+        features = [global_pool, blue_pool, red_pool, team_gap, lane_diffs, region_features, blue_side]
         if self.dense_encoder is not None:
             if dense_features is None:
                 dense_features = torch.zeros((x.size(0), self.dense_feature_dim), device=x.device, dtype=x.dtype)
@@ -92,4 +107,8 @@ class UnifiedWinPredictorModel(nn.Module):
                 dense_features = dense_features.to(dtype=x.dtype)
             features.append(self.dense_encoder(dense_features))
 
-        return self.head(torch.cat(features, dim=1))
+        shared = torch.cat(features, dim=1)
+        win_logit = self.win_head(shared)
+        if return_aux:
+            return win_logit, self.aux_head(shared)
+        return win_logit

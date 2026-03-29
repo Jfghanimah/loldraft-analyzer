@@ -8,15 +8,14 @@ Important context:
 - The active scraper currently collects match payloads and ordered draft projections only.
 - The active ML path is now one unified single-phase model.
 - It trains from scratch on ordered drafts plus recent player-history features.
-- Older pretrain and sequence experiments still exist in the repo, but they are not the main path.
 - Humans should launch meaningful training runs for now.
 - The repo-root `ROADMAP.MD` is the big-picture plan. `ml/todo.txt` is the short local working list for ML-specific tasks.
 
 Project structure:
 
 - `data/`: SQLite collection, storage helpers, merge utilities, and dataset loading
-- `trainer/`: active unified training entry point plus older experiment scripts
-- `predictor/`: PyTorch model definitions, including the active unified model
+- `trainer/`: active unified training entry point and feature pipeline
+- `predictor/`: the active unified PyTorch model
 - `z_leagacy_save_data/`: saved checkpoints and champion mappings
 - `runtime_config.py`: shared scraper/runtime config loading
 

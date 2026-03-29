@@ -2,7 +2,7 @@ import json
 import sqlite3
 
 from ml.features.recent_history import PARTICIPANT_FEATURES
-from ml.trainer.feature_pipeline import build_dense_features_for_prediction, build_rich_feature_dataframe
+from ml.trainer.feature_pipeline import AUX_TARGET_COLUMNS, CHAMPION_COLUMNS, build_dense_features_for_prediction, build_rich_feature_dataframe
 from ml.data.match_storage import ensure_match_schema
 
 
@@ -169,14 +169,16 @@ def test_build_rich_feature_dataframe_generates_dense_features_from_prior_matche
 
     assert len(df) == 2
     assert len(champion_list) >= 12
-    assert df.shape[1] == 184
+    assert df.shape[1] == 159
 
-    dense_columns = list(df.columns[12:])
+    dense_columns = [column for column in df.columns if column not in {"label", *CHAMPION_COLUMNS, "blue_side", "region_id", *AUX_TARGET_COLUMNS}]
     dense_sums = sorted(float(df.iloc[i][dense_columns].sum()) for i in range(len(df)))
 
     assert dense_sums[0] >= 0.0
     assert dense_sums[1] > dense_sums[0]
     assert f"slot_0_blue_top_{PARTICIPANT_FEATURES[0]}" in dense_columns
+    assert "region_id" in df.columns
+    assert "target_gold_diff" in df.columns
     assert "patch_major" in dense_columns
     assert "patch_minor" in dense_columns
 
@@ -209,21 +211,21 @@ def test_build_dense_features_for_prediction_uses_recent_prior_rows_only(tmp_pat
     )
     conn.close()
 
-    assert len(features) == 172
+    assert len(features) == 142
     top_offset = 0
     games_played = features[top_offset]
     champ_games = features[top_offset + 2]
-    games_last_3d = features[top_offset + 12]
-    hours_since_last = features[top_offset + 14]
-    unique_champions = features[top_offset + 15]
+    games_last_3d = features[top_offset + 7]
+    avg_game_length = features[top_offset + 8]
+    avg_dpm = features[top_offset + 9]
     patch_major = features[-2]
     patch_minor = features[-1]
 
     assert games_played > 0.0
     assert champ_games > 0.0
     assert games_last_3d > 0.0
-    assert 0.0 < hours_since_last < 1.0
-    assert unique_champions > 0.0
+    assert avg_game_length > 0.0
+    assert avg_dpm > 0.0
     assert patch_major == 0.0
     assert patch_minor == 0.0
 
@@ -348,7 +350,7 @@ def test_training_and_prediction_share_recent_history_feature_values(tmp_path):
     )
     conn.close()
 
-    dense_columns = list(df.columns[12:])
+    dense_columns = [column for column in df.columns if column not in {"label", *CHAMPION_COLUMNS, "blue_side", "region_id", *AUX_TARGET_COLUMNS}]
     richer_row = max((df.iloc[i][dense_columns].tolist() for i in range(len(df))), key=sum)
     assert richer_row == prediction_features
 

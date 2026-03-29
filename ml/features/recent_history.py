@@ -18,16 +18,13 @@ PARTICIPANT_FEATURES = (
     "role_games",
     "role_win_rate",
     "avg_kda",
-    "avg_vision",
-    "avg_damage",
-    "avg_heal",
-    "avg_gold",
-    "avg_cs",
     "games_last_3d",
-    "games_last_7d",
-    "hours_since_last_game",
-    "unique_champions",
-    "unique_roles",
+    "avg_game_length_minutes",
+    "avg_dpm",
+    "avg_gpm",
+    "avg_cspm",
+    "avg_vspm",
+    "avg_hpm",
 )
 
 GLOBAL_FEATURES = ("patch_major", "patch_minor")
@@ -51,6 +48,10 @@ def _normalize_hours_since_last(hours):
     return min(hours / HOURS_SINCE_LAST_CAP, 1.0)
 
 
+def _duration_minutes(row):
+    return max(float(row.get("duration_minutes", 0.0) or 0.0), 1.0)
+
+
 def _aggregate_recent_history(prior_rows, champion_name, role, current_game_creation):
     rows = list(prior_rows)[:RECENT_MATCH_LIMIT]
     total_games = len(rows)
@@ -58,20 +59,38 @@ def _aggregate_recent_history(prior_rows, champion_name, role, current_game_crea
     champ_rows = [row for row in rows if row["champion_name"] == champion_name]
     role_rows = [row for row in rows if row["role"] == role]
     games_last_3d = 0
-    games_last_7d = 0
-    last_game_creation = rows[0]["game_creation"] if rows else None
+    avg_game_length = _normalize_avg(sum(_duration_minutes(row) for row in rows), total_games, 45.0)
+    avg_dpm = _normalize_avg(
+        sum(float(row["damage_to_champions"]) / _duration_minutes(row) for row in rows),
+        total_games,
+        1500.0,
+    )
+    avg_gpm = _normalize_avg(
+        sum(float(row.get("gold_earned", 0.0)) / _duration_minutes(row) for row in rows),
+        total_games,
+        900.0,
+    )
+    avg_cspm = _normalize_avg(
+        sum(float(row.get("cs", 0.0)) / _duration_minutes(row) for row in rows),
+        total_games,
+        15.0,
+    )
+    avg_vspm = _normalize_avg(
+        sum(float(row["vision_score"]) / _duration_minutes(row) for row in rows),
+        total_games,
+        6.0,
+    )
+    avg_hpm = _normalize_avg(
+        sum(float(row["healing"]) / _duration_minutes(row) for row in rows),
+        total_games,
+        1200.0,
+    )
 
     if current_game_creation:
         for row in rows:
             delta = max(0, int(current_game_creation) - int(row["game_creation"]))
             if delta <= RECENT_WINDOWS_MS["games_last_3d"]:
                 games_last_3d += 1
-            if delta <= RECENT_WINDOWS_MS["games_last_7d"]:
-                games_last_7d += 1
-
-    hours_since_last = None
-    if current_game_creation and last_game_creation:
-        hours_since_last = max(0.0, float(current_game_creation - last_game_creation) / 3_600_000.0)
 
     return [
         _normalize_count(total_games),
@@ -81,16 +100,13 @@ def _aggregate_recent_history(prior_rows, champion_name, role, current_game_crea
         _normalize_count(len(role_rows)),
         _normalize_rate(sum(int(row["win"]) for row in role_rows), len(role_rows)),
         _normalize_avg(sum((row["kills"] + row["assists"]) / max(1, row["deaths"]) for row in rows), total_games, 10.0),
-        _normalize_avg(sum(row["vision_score"] for row in rows), total_games, 100.0),
-        _normalize_avg(sum(row["damage_to_champions"] for row in rows), total_games, 50000.0),
-        _normalize_avg(sum(row["healing"] for row in rows), total_games, 20000.0),
-        _normalize_avg(sum(row.get("gold_earned", 0.0) for row in rows), total_games, 25000.0),
-        _normalize_avg(sum(row.get("cs", 0.0) for row in rows), total_games, 400.0),
         _normalize_count(games_last_3d),
-        _normalize_count(games_last_7d),
-        _normalize_hours_since_last(hours_since_last),
-        _normalize_count(len({row["champion_name"] for row in rows})),
-        _normalize_count(len({row["role"] for row in rows}), scale=2.0),
+        avg_game_length,
+        avg_dpm,
+        avg_gpm,
+        avg_cspm,
+        avg_vspm,
+        avg_hpm,
     ]
 
 

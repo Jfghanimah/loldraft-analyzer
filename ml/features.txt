@@ -1,4 +1,4 @@
-  Per-player history features (17 features × 10 players = 170 dense features)
+  Per-player history features (14 features × 10 players = 140 dense features)
   ┌───────────────────────┬────────────────────────────────────────────────┐
   │        Feature        │                What it captures                │
   ├───────────────────────┼────────────────────────────────────────────────┤
@@ -16,51 +16,34 @@
   ├───────────────────────┼────────────────────────────────────────────────┤
   │ avg_kda               │ Combat performance                             │
   ├───────────────────────┼────────────────────────────────────────────────┤
-  │ avg_vision            │ Vision control habit                           │
-  ├───────────────────────┼────────────────────────────────────────────────┤
-  │ avg_damage            │ Damage output                                  │
-  ├───────────────────────┼────────────────────────────────────────────────┤
-  │ avg_heal              │ Healing output                                 │
-  ├───────────────────────┼────────────────────────────────────────────────┤
-  │ avg_gold              │ Gold efficiency                                │
-  ├───────────────────────┼────────────────────────────────────────────────┤
-  │ avg_cs                │ Farm performance                               │
-  ├───────────────────────┼────────────────────────────────────────────────┤
   │ games_last_3d         │ Activity intensity (3-day window)              │
   ├───────────────────────┼────────────────────────────────────────────────┤
-  │ games_last_7d         │ Activity intensity (7-day window)              │
+  │ avg_game_length_minutes │ Average prior game length                    │
   ├───────────────────────┼────────────────────────────────────────────────┤
-  │ hours_since_last_game │ Rust/warmup proxy                              │
+  │ avg_dpm               │ Damage per minute                              │
   ├───────────────────────┼────────────────────────────────────────────────┤
-  │ unique_champions      │ Champion pool breadth                          │
+  │ avg_gpm               │ Gold per minute                                │
   ├───────────────────────┼────────────────────────────────────────────────┤
-  │ unique_roles          │ Role flexibility                               │
+  │ avg_cspm              │ CS per minute                                  │
+  ├───────────────────────┼────────────────────────────────────────────────┤
+  │ avg_vspm              │ Vision score per minute                        │
+  ├───────────────────────┼────────────────────────────────────────────────┤
+  │ avg_hpm               │ Healing per minute                             │
   ├───────────────────────┼────────────────────────────────────────────────┤
 
    Global features (2)
   - patch_major, patch_minor — which patch the game was played on
 
-  Draft features
+  Draft / context features
   - 10 champion IDs (one per slot, role-ordered: Top/Jg/Mid/Bot/Sup × Blue/Red)
   - 1 blue side indicator (did this team have blue side?)
+  - 1 region ID
 
-  Total: 10 champion IDs + 1 blue_side + 172 dense = 183 inputs
+  Total inputs: 10 champion IDs + 1 blue_side + 1 region_id + 142 dense = 154 inputs
 
-
-
-
-  TODO/FUTURE IDEAS:
-  - Some Ideas for INPUT featurees
-  - Ban phase data? idk if predicting winner from ban phase even makes sense or is meaningful whatsoever lol also want to be careful that if we use the same champ embeddings there needs to be a sufficent amount of nodes between the picked champ and banned champ so the model doesnt confuse their meaning
-  - provide average gametime in the features? or perhaps adjust players averages by game time?
-  - example: instead of giving average damage you give average DPM that way its more meaningful
-  - same with CS instead of just doing all minions killed / 20 youd do CSPM per game averaged by 20 more meaningful?
-  - and then we can pass in the average gametime so model knows if player ends fast or takes long.
-  - if its easy to get it would be interesting to provide how many dragons they get per game. or maybe taken vs lost dragons.
-
-
-  - IDEAS FOR OUT OUT PREDICT: 
-  - gold for both teams or gold diff or both
-  - the amount of dragons each team will get?
-  - towers gotten on each side? (this one might be too noisy but idk)
-  - this might be really complex we could explore this if were stuck but maybe try to actually predict the performance details like kda cs gold per player haha
+  Auxiliary training targets
+  - win/loss
+  - gold_diff
+  - blue_dragons
+  - red_dragons
+  - game_length_minutes
