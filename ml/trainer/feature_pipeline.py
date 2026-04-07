@@ -46,6 +46,11 @@ READ_PRAGMAS = (
     "PRAGMA temp_store = MEMORY",
 )
 
+try:
+    import orjson
+except ImportError:  # pragma: no cover
+    orjson = None
+
 
 def _load_champion_list(champion_path):
     if not os.path.exists(champion_path):
@@ -61,6 +66,13 @@ def _load_region_list(region_path):
         return json.load(f)
 
 
+def _write_id_mapping(mapping, path):
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    ordered = dict(sorted(mapping.items(), key=lambda item: item[1]))
+    with open(path, "w", encoding="utf-8") as f:
+        json.dump(ordered, f, indent=4)
+
+
 def _sync_champion_list(champion_list, observed_champions, champion_path):
     next_id = max(champion_list.values(), default=-1) + 1
     observed = sorted(set(observed_champions))
@@ -69,10 +81,7 @@ def _sync_champion_list(champion_list, observed_champions, champion_path):
         for champ in missing:
             champion_list[champ] = next_id
             next_id += 1
-        os.makedirs(os.path.dirname(champion_path), exist_ok=True)
-        ordered = dict(sorted(champion_list.items(), key=lambda item: item[1]))
-        with open(champion_path, "w", encoding="utf-8") as f:
-            json.dump(ordered, f, indent=4)
+        _write_id_mapping(champion_list, champion_path)
     return champion_list
 
 
@@ -84,10 +93,7 @@ def _sync_region_list(region_list, observed_regions, region_path):
         for region in missing:
             region_list[region] = next_id
             next_id += 1
-        os.makedirs(os.path.dirname(region_path), exist_ok=True)
-        ordered = dict(sorted(region_list.items(), key=lambda item: item[1]))
-        with open(region_path, "w", encoding="utf-8") as f:
-            json.dump(ordered, f, indent=4)
+        _write_id_mapping(region_list, region_path)
     return region_list
 
 
@@ -107,41 +113,75 @@ def _configure_training_connection(conn):
 
 
 def _count_training_matches(conn, queue_id):
-    row = conn.execute(
-        """
-        SELECT count(*)
-        FROM matches
-        WHERE ordered_match_json IS NOT NULL
-          AND (? IS NULL OR queue_id = ?)
-        """,
-        (queue_id, queue_id),
-    ).fetchone()
+    if queue_id is None:
+        row = conn.execute(
+            """
+            SELECT count(*)
+            FROM matches
+            WHERE ordered_match_json IS NOT NULL
+            """
+        ).fetchone()
+    else:
+        row = conn.execute(
+            """
+            SELECT count(*)
+            FROM matches
+            WHERE ordered_match_json IS NOT NULL
+              AND queue_id = ?
+            """,
+            (queue_id,),
+        ).fetchone()
     return int(row[0] or 0) if row else 0
 
 
 def _iter_training_ordered_match_json(conn, queue_id):
+    if queue_id is None:
+        return conn.execute(
+            """
+            SELECT ordered_match_json, region
+            FROM matches
+            WHERE ordered_match_json IS NOT NULL
+            """
+        )
     return conn.execute(
         """
         SELECT ordered_match_json, region
         FROM matches
         WHERE ordered_match_json IS NOT NULL
-          AND (? IS NULL OR queue_id = ?)
+          AND queue_id = ?
         """,
-        (queue_id, queue_id),
+        (queue_id,),
     )
 
 
 def _iter_training_matches(conn, queue_id):
+    if queue_id is None:
+        return conn.execute(
+            """
+            SELECT match_id, ordered_match_json, region, game_creation, game_end_timestamp, game_version,
+                   blue_dragons, red_dragons, gold_diff, game_length_minutes
+            FROM matches
+            WHERE ordered_match_json IS NOT NULL
+            ORDER BY game_creation, match_id
+            """
+        )
     return conn.execute(
         """
-        SELECT match_id, ordered_match_json, raw_match_json, region, game_creation, game_end_timestamp, game_version
+        SELECT match_id, ordered_match_json, region, game_creation, game_end_timestamp, game_version,
+               blue_dragons, red_dragons, gold_diff, game_length_minutes
         FROM matches
         WHERE ordered_match_json IS NOT NULL
-          AND (? IS NULL OR queue_id = ?)
-        ORDER BY COALESCE(game_creation, 0), match_id
+          AND queue_id = ?
+        ORDER BY game_creation, match_id
         """,
-        (queue_id, queue_id),
+        (queue_id,),
     )
+
+
+def _loads_json(payload):
+    if orjson is not None:
+        return orjson.loads(payload)
+    return json.loads(payload)
 
 
 def _fetch_raw_match(conn, match_id):
@@ -166,22 +206,35 @@ def _fetch_raw_participant_rows(conn, match_id):
 
 def _participant_history_row_from_tuple(row):
     duration_minutes = max(float(((row[15] or 0) - (row[13] or 0)) / 60_000.0), 1.0)
+    kills = int(row[5] or 0)
+    deaths = int(row[6] or 0)
+    assists = int(row[7] or 0)
+    damage_to_champions = float(row[9] or 0.0)
+    healing = float(row[10] or 0.0)
+    gold_earned = float(row[11] or 0.0)
+    cs = float(row[12] or 0.0)
     return {
         "puuid": row[1],
         "champion_name": row[2],
         "role": row[3],
         "win": int(row[4] or 0),
-        "kills": int(row[5] or 0),
-        "deaths": int(row[6] or 0),
-        "assists": int(row[7] or 0),
+        "kills": kills,
+        "deaths": deaths,
+        "assists": assists,
         "vision_score": float(row[8] or 0.0),
-        "damage_to_champions": float(row[9] or 0.0),
-        "healing": float(row[10] or 0.0),
-        "gold_earned": float(row[11] or 0.0),
-        "cs": float(row[12] or 0.0),
+        "damage_to_champions": damage_to_champions,
+        "healing": healing,
+        "gold_earned": gold_earned,
+        "cs": cs,
         "game_creation": int(row[13] or 0),
         "team_id": int(row[14] or 0),
         "duration_minutes": duration_minutes,
+        "kda_value": (kills + assists) / max(1, deaths),
+        "dpm_value": damage_to_champions / duration_minutes,
+        "gpm_value": gold_earned / duration_minutes,
+        "cspm_value": cs / duration_minutes,
+        "vspm_value": float(row[8] or 0.0) / duration_minutes,
+        "hpm_value": healing / duration_minutes,
     }
 
 
@@ -192,18 +245,30 @@ def _sort_participant_rows(rows):
 
 def _iter_participant_rows_by_match(conn, queue_id):
     try:
-        cursor = conn.execute(
-            """
-            SELECT ph.match_id, ph.puuid, ph.champion_name, ph.role, ph.win, ph.kills, ph.deaths, ph.assists,
-                   ph.vision_score, ph.damage_to_champions, ph.healing, ph.gold_earned, ph.cs,
-                   ph.game_creation, ph.team_id, m.game_end_timestamp
-            FROM participant_history ph
-            LEFT JOIN matches m ON m.match_id = ph.match_id
-            WHERE (? IS NULL OR ph.queue_id = ?)
-            ORDER BY COALESCE(ph.game_creation, 0), ph.match_id, ph.team_id
-            """,
-            (queue_id, queue_id),
-        )
+        if queue_id is None:
+            cursor = conn.execute(
+                """
+                SELECT ph.match_id, ph.puuid, ph.champion_name, ph.role, ph.win, ph.kills, ph.deaths, ph.assists,
+                       ph.vision_score, ph.damage_to_champions, ph.healing, ph.gold_earned, ph.cs,
+                       ph.game_creation, ph.team_id, m.game_end_timestamp
+                FROM participant_history ph
+                LEFT JOIN matches m ON m.match_id = ph.match_id
+                ORDER BY ph.game_creation, ph.match_id, ph.team_id
+                """
+            )
+        else:
+            cursor = conn.execute(
+                """
+                SELECT ph.match_id, ph.puuid, ph.champion_name, ph.role, ph.win, ph.kills, ph.deaths, ph.assists,
+                       ph.vision_score, ph.damage_to_champions, ph.healing, ph.gold_earned, ph.cs,
+                       ph.game_creation, ph.team_id, m.game_end_timestamp
+                FROM participant_history ph
+                LEFT JOIN matches m ON m.match_id = ph.match_id
+                WHERE ph.queue_id = ?
+                ORDER BY ph.game_creation, ph.match_id, ph.team_id
+                """,
+                (queue_id,),
+            )
     except sqlite3.OperationalError:
         return
 
@@ -253,7 +318,7 @@ def _build_dense_features_from_rows(participant_rows, history_store, current_gam
     return feature_values
 
 
-def _extract_multitask_targets(raw_match, game_creation, game_end_timestamp):
+def _extract_multitask_targets(raw_match, game_creation, game_end_timestamp, participant_rows=None):
     info = raw_match.get("info", {}) if raw_match else {}
     teams = {team.get("teamId"): team for team in info.get("teams", [])}
     blue_team = teams.get(100, {})
@@ -263,13 +328,22 @@ def _extract_multitask_targets(raw_match, game_creation, game_end_timestamp):
 
     blue_gold = 0.0
     red_gold = 0.0
-    for participant in info.get("participants", []):
-        team_id = int(participant.get("teamId", 0) or 0)
-        gold = float(participant.get("goldEarned", 0.0) or 0.0)
-        if team_id == 100:
-            blue_gold += gold
-        elif team_id == 200:
-            red_gold += gold
+    if participant_rows:
+        for participant in participant_rows:
+            team_id = int(participant.get("team_id", 0) or 0)
+            gold = float(participant.get("gold_earned", 0.0) or 0.0)
+            if team_id == 100:
+                blue_gold += gold
+            elif team_id == 200:
+                red_gold += gold
+    else:
+        for participant in info.get("participants", []):
+            team_id = int(participant.get("teamId", 0) or 0)
+            gold = float(participant.get("goldEarned", 0.0) or 0.0)
+            if team_id == 100:
+                blue_gold += gold
+            elif team_id == 200:
+                red_gold += gold
 
     game_length_minutes = max(float(((game_end_timestamp or 0) - (game_creation or 0)) / 60_000.0), 1.0)
     return [
@@ -277,6 +351,44 @@ def _extract_multitask_targets(raw_match, game_creation, game_end_timestamp):
         blue_dragons,
         red_dragons,
         game_length_minutes,
+    ]
+
+
+def _extract_compact_targets(
+    *,
+    blue_dragons,
+    red_dragons,
+    gold_diff,
+    game_length_minutes,
+    participant_rows,
+    game_creation,
+    game_end_timestamp,
+):
+    derived_gold_diff = None
+    if participant_rows:
+        blue_gold = 0.0
+        red_gold = 0.0
+        for participant in participant_rows:
+            team_id = int(participant.get("team_id", 0) or 0)
+            gold = float(participant.get("gold_earned", 0.0) or 0.0)
+            if team_id == 100:
+                blue_gold += gold
+            elif team_id == 200:
+                red_gold += gold
+        derived_gold_diff = blue_gold - red_gold
+
+    compact_game_length = game_length_minutes
+    if compact_game_length is None:
+        compact_game_length = max(float(((game_end_timestamp or 0) - (game_creation or 0)) / 60_000.0), 1.0)
+
+    if blue_dragons is None or red_dragons is None:
+        return None
+
+    return [
+        float(derived_gold_diff if derived_gold_diff is not None else (gold_diff or 0.0)),
+        float(blue_dragons or 0.0),
+        float(red_dragons or 0.0),
+        float(compact_game_length or 1.0),
     ]
 
 
@@ -337,25 +449,16 @@ def build_rich_feature_dataframe(
         f"Found {total_rows:,} ordered matches for feature generation"
     )
 
-    started_at = time.time()
-    _print_phase_status("Scanning ordered match rows to sync champion IDs...")
-    observed_champions = set()
-    observed_regions = set()
-    for index, (ordered_match_json, region) in enumerate(_iter_training_ordered_match_json(conn, queue_id), start=1):
-        observed_champions.update(json.loads(ordered_match_json)["champions"])
-        if region:
-            observed_regions.add(region)
-        if index % PROGRESS_UPDATE_EVERY == 0 or index == total_rows:
-            _print_phase_status(f"Scanned {index:,}/{total_rows:,} ordered matches for champion sync")
-    champion_list = _sync_champion_list(_load_champion_list(champion_path), observed_champions, champion_path)
-    region_list = _sync_region_list(_load_region_list(region_path), observed_regions, region_path)
+    champion_list = _load_champion_list(champion_path)
+    region_list = _load_region_list(region_path)
+    champion_mapping_updated = False
+    region_mapping_updated = False
     _print_phase_status(
-        f"Champion map ready with {len(champion_list):,} champions and {max(len(region_list), 1):,} regions after "
-        f"{_format_duration(time.time() - started_at)}"
+        f"Loaded champion map with {len(champion_list):,} champions and {max(len(region_list), 1):,} regions"
     )
 
     history_store = RecentHistoryStore()
-    column_names = ["label", *CHAMPION_COLUMNS, "blue_side", "region_id", *AUX_TARGET_COLUMNS, *dense_feature_columns(ROLE_ORDER)]
+    column_names = ["label", *CHAMPION_COLUMNS, "region_id", *AUX_TARGET_COLUMNS, *dense_feature_columns(ROLE_ORDER)]
     feature_matrix = np.empty((max(total_rows, 1), len(column_names)), dtype=np.float64)
     participant_rows_by_match = iter(_iter_participant_rows_by_match(conn, queue_id))
     current_participant_group = _next_or_none(participant_rows_by_match)
@@ -364,7 +467,10 @@ def build_rich_feature_dataframe(
     started_at = time.time()
     _print_phase_status(f"Building dense pre-match features for {total_rows:,} matches...")
 
-    for index, (match_id, ordered_json, raw_json, region, game_creation, game_end_timestamp, game_version) in enumerate(
+    raw_fallback_rows = 0
+    target_raw_fallback_rows = 0
+
+    for index, (match_id, ordered_json, region, game_creation, game_end_timestamp, game_version, blue_dragons, red_dragons, gold_diff, game_length_minutes) in enumerate(
         _iter_training_matches(conn, queue_id),
         start=1,
     ):
@@ -381,20 +487,22 @@ def build_rich_feature_dataframe(
             participant_rows = current_participant_group[2]
             current_participant_group = _next_or_none(participant_rows_by_match)
 
-        raw_match = json.loads(raw_json) if raw_json else None
+        raw_match = None
         if len(participant_rows) != 10:
+            raw_match = _fetch_raw_match(conn, match_id)
             participant_rows = _sort_participant_rows(extract_participant_history_rows(raw_match) if raw_match else [])
             if len(participant_rows) == 10:
                 duration_minutes = max(float(((game_end_timestamp or 0) - (game_creation or 0)) / 60_000.0), 1.0)
                 for row in participant_rows:
                     row["duration_minutes"] = duration_minutes
                 fallback_rows += 1
+                raw_fallback_rows += 1
         if len(participant_rows) != 10:
             if index % PROGRESS_UPDATE_EVERY == 0 or index == total_rows:
                 _print_feature_progress(index, total_rows, built_rows, fallback_rows, started_at, force=index == total_rows)
             continue
 
-        ordered_record = json.loads(ordered_json)
+        ordered_record = _loads_json(ordered_json)
         feature_values = _build_dense_features_from_rows(
             participant_rows,
             history_store,
@@ -403,12 +511,40 @@ def build_rich_feature_dataframe(
         )
 
         blue_win = int(bool(ordered_record["blue_win"]))
-        blue_side = int(ordered_record.get("blue_side", 1))
-        region_id = region_list.get(region or "", 0)
-        champion_ids = [champion_list[champ] for champ in ordered_record["champions"]]
-        targets = _extract_multitask_targets(raw_match, int(game_creation or 0), int(game_end_timestamp or 0))
+        region_key = region or ""
+        if region_key and region_key not in region_list:
+            region_list[region_key] = len(region_list)
+            region_mapping_updated = True
+        region_id = region_list.get(region_key, 0)
+        champion_ids = []
+        for champion_name in ordered_record["champions"]:
+            champion_id = champion_list.get(champion_name)
+            if champion_id is None:
+                champion_id = len(champion_list)
+                champion_list[champion_name] = champion_id
+                champion_mapping_updated = True
+            champion_ids.append(champion_id)
+        targets = _extract_compact_targets(
+            blue_dragons=blue_dragons,
+            red_dragons=red_dragons,
+            gold_diff=gold_diff,
+            game_length_minutes=game_length_minutes,
+            participant_rows=participant_rows,
+            game_creation=int(game_creation or 0),
+            game_end_timestamp=int(game_end_timestamp or 0),
+        )
+        if targets is None:
+            if raw_match is None:
+                raw_match = _fetch_raw_match(conn, match_id)
+            targets = _extract_multitask_targets(
+                raw_match,
+                int(game_creation or 0),
+                int(game_end_timestamp or 0),
+                participant_rows=participant_rows,
+            )
+            target_raw_fallback_rows += 1
         feature_matrix[built_rows] = np.asarray(
-            [blue_win] + champion_ids + [blue_side, region_id] + targets + feature_values,
+            [blue_win] + champion_ids + [region_id] + targets + feature_values,
             dtype=np.float64,
         )
         built_rows += 1
@@ -419,6 +555,11 @@ def build_rich_feature_dataframe(
 
     conn.close()
 
+    if champion_mapping_updated:
+        _write_id_mapping(champion_list, champion_path)
+    if region_mapping_updated:
+        _write_id_mapping(region_list, region_path)
+
     if not built_rows:
         raise ValueError(
             "No rich feature rows could be built. Make sure the DB contains raw_match_json and ordered_match_json."
@@ -426,6 +567,11 @@ def build_rich_feature_dataframe(
 
     if fallback_rows:
         print(f"[Phase 2] participant_history missing for {fallback_rows:,} matches; fell back to raw_match_json.")
+    if target_raw_fallback_rows:
+        print(
+            f"[Phase 2] compact auxiliary targets missing for {target_raw_fallback_rows:,} matches; "
+            "fell back to raw_match_json for target extraction."
+        )
 
     df = pd.DataFrame(feature_matrix[:built_rows], columns=column_names)
     _print_phase_status(
@@ -515,7 +661,7 @@ def build_dense_features_for_prediction(
             WHERE (? IS NULL OR queue_id = ?)
               AND game_version IS NOT NULL
               AND game_version != ''
-            ORDER BY COALESCE(game_creation, 0) DESC, match_id DESC
+            ORDER BY game_creation DESC, match_id DESC
             LIMIT 1
             """,
             (queue_id, queue_id),

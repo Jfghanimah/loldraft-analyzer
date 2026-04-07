@@ -1,0 +1,103 @@
+Data Pipeline Performance Notes
+
+Purpose
+- Record what the unified training pipeline reads from SQLite, which parts are expensive, and what we learned from temporary benchmark scripts.
+- Avoid re-learning the same I/O lessons later.
+
+Current Training Data Sources
+- Draft champions:
+  sourced from `matches.ordered_match_json`
+- Region:
+  sourced from `matches.region`
+- Patch features:
+  sourced from `matches.game_version`
+- Player history features:
+  sourced from compact relational rows in `participant_history`
+- Auxiliary targets today:
+  `gold_diff`, `blue_dragons`, `red_dragons`, `game_length_minutes`
+  currently derived during training from `raw_match_json` plus match timestamps
+
+Important Clarification
+- The SQLite cost is not uniform across all training inputs.
+- `participant_history` is relatively compact tabular data and is much more training-friendly than raw JSON blobs.
+- `ordered_match_json` is still JSON and still costs parse time, but it is much smaller than `raw_match_json`.
+- `raw_match_json` is the worst path because training has to:
+  1. fetch a large text blob from SQLite
+  2. deserialize that blob in Python
+  3. extract a tiny amount of information from it
+
+Measured Finding From `temp_sum_dragons.py`
+- A simple sequential scan that only:
+  1. reads `raw_match_json`
+  2. parses it
+  3. sums dragon kills
+  ran at roughly `700-800 matches/s` on the current large DB.
+- The timing breakdown showed:
+  - JSON parse time was the largest bucket
+  - SQLite blob fetch time was the second-largest bucket
+  - actual dragon extraction logic was basically free
+
+What This Means
+- The main bottleneck is not the math for labels or features.
+- The main bottleneck is repeatedly using SQLite as a blob store for raw Riot match JSON during training.
+- Keeping raw JSON for archival/debugging is fine.
+- Using raw JSON in the hot training path is not fine.
+
+Why Training Still Depends On SQLite
+- The model still needs SQLite as the source of truth for:
+  - participant histories
+  - ordered champions
+  - players / PUUID-aligned history rows
+  - region and version metadata
+- The issue is not "SQLite bad" in the abstract.
+- The issue is "large JSON blobs in SQLite are bad as a repeatedly scanned training substrate."
+
+Recommended Direction
+1. Keep raw JSON only for archive/debug/fallback purposes.
+2. Materialize compact training columns once and train from those compact columns.
+3. Stop parsing `raw_match_json` during normal training.
+
+Current Status
+- The active unified training path now prefers compact target columns from `matches`.
+- `raw_match_json` is only fetched lazily as a fallback when:
+  - `participant_history` is missing for a match, or
+  - compact auxiliary target columns have not been backfilled yet
+- Existing older DBs still need a one-time backfill to get the full speedup.
+
+Compact Columns We Should Prefer In Training
+- Already present or derivable in `matches`:
+  - `region`
+  - `game_version`
+  - `game_creation`
+  - `game_end_timestamp`
+  - `blue_first_blood`
+  - `blue_first_tower`
+  - `blue_dragon_share`
+  - `blue_gold_share`
+- Still worth materializing explicitly for the unified trainer:
+  - `blue_dragons`
+  - `red_dragons`
+  - `gold_diff`
+  - `game_length_minutes`
+- Longer term, even draft champions could be materialized in a more compact numeric format than JSON text.
+
+Training Hot Path Priorities
+1. Eliminate `raw_match_json` reads from the normal unified training build.
+2. Keep using `participant_history` for per-player history features.
+3. Keep using region / patch / timestamps from compact `matches` columns.
+4. Eventually reduce or replace `ordered_match_json` parse cost too if iteration speed still matters.
+
+Temporary Benchmark Scripts
+- `ml/temp_sum_dragons.py`
+  isolates raw JSON fetch + parse + simple objective extraction
+- `ml/temp_benchmark_training_io.py`
+  compares:
+  - `raw_match_json` parse path
+  - `ordered_match_json` parse path
+  - compact match-column scan
+  - `participant_history` row streaming
+
+Takeaway
+- Raw JSON is the expensive part.
+- Compact relational columns are the direction.
+- The pipeline should keep SQLite as metadata/history storage, but training should avoid using it as a giant JSON document reader.

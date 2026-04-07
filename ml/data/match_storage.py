@@ -23,6 +23,10 @@ MATCH_COLUMNS = {
     "blue_first_tower": "INTEGER",
     "blue_dragon_share": "REAL",
     "blue_gold_share": "REAL",
+    "blue_dragons": "INTEGER",
+    "red_dragons": "INTEGER",
+    "gold_diff": "REAL",
+    "game_length_minutes": "REAL",
     "last_updated_ts": "INTEGER",
 }
 MATCH_INDEXES = (
@@ -314,6 +318,10 @@ def extract_auxiliary_outcome_features(match):
         "blue_first_tower": int(bool(_objective(blue_objectives, "tower", "first", False))),
         "blue_dragon_share": float(blue_dragon_share),
         "blue_gold_share": float(blue_gold_share),
+        "blue_dragons": int(blue_dragons),
+        "red_dragons": int(red_dragons),
+        "gold_diff": float(blue_gold - red_gold),
+        "game_length_minutes": max(float(((info.get("gameEndTimestamp") or 0) - (info.get("gameCreation") or 0)) / 60_000.0), 1.0),
     }
 
 
@@ -343,6 +351,10 @@ def extract_storage_payload(match, region, ordered_match_data, collector_id="", 
         "blue_first_tower": auxiliary_outcomes["blue_first_tower"],
         "blue_dragon_share": auxiliary_outcomes["blue_dragon_share"],
         "blue_gold_share": auxiliary_outcomes["blue_gold_share"],
+        "blue_dragons": auxiliary_outcomes["blue_dragons"],
+        "red_dragons": auxiliary_outcomes["red_dragons"],
+        "gold_diff": auxiliary_outcomes["gold_diff"],
+        "game_length_minutes": auxiliary_outcomes["game_length_minutes"],
         "last_updated_ts": now_ts,
         "participant_history_rows": extract_participant_history_rows(match),
     }
@@ -368,8 +380,12 @@ def upsert_match_record(conn: sqlite3.Connection, match_id: str, payload: dict):
             blue_first_tower,
             blue_dragon_share,
             blue_gold_share,
+            blue_dragons,
+            red_dragons,
+            gold_diff,
+            game_length_minutes,
             last_updated_ts
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         ON CONFLICT(match_id) DO UPDATE SET
             match_data = excluded.match_data,
             region = excluded.region,
@@ -386,6 +402,10 @@ def upsert_match_record(conn: sqlite3.Connection, match_id: str, payload: dict):
             blue_first_tower = excluded.blue_first_tower,
             blue_dragon_share = excluded.blue_dragon_share,
             blue_gold_share = excluded.blue_gold_share,
+            blue_dragons = excluded.blue_dragons,
+            red_dragons = excluded.red_dragons,
+            gold_diff = excluded.gold_diff,
+            game_length_minutes = excluded.game_length_minutes,
             last_updated_ts = excluded.last_updated_ts
         """,
         (
@@ -405,6 +425,10 @@ def upsert_match_record(conn: sqlite3.Connection, match_id: str, payload: dict):
             payload["blue_first_tower"],
             payload["blue_dragon_share"],
             payload["blue_gold_share"],
+            payload["blue_dragons"],
+            payload["red_dragons"],
+            payload["gold_diff"],
+            payload["game_length_minutes"],
             payload["last_updated_ts"],
         ),
     )
@@ -474,6 +498,10 @@ def rebuild_participant_history(
                     auxiliary_outcomes["blue_first_tower"],
                     auxiliary_outcomes["blue_dragon_share"],
                     auxiliary_outcomes["blue_gold_share"],
+                    auxiliary_outcomes["blue_dragons"],
+                    auxiliary_outcomes["red_dragons"],
+                    auxiliary_outcomes["gold_diff"],
+                    auxiliary_outcomes["game_length_minutes"],
                     match.get("metadata", {}).get("matchId"),
                 )
             )
@@ -487,7 +515,11 @@ def rebuild_participant_history(
                     SET blue_first_blood = ?,
                         blue_first_tower = ?,
                         blue_dragon_share = ?,
-                        blue_gold_share = ?
+                        blue_gold_share = ?,
+                        blue_dragons = ?,
+                        red_dragons = ?,
+                        gold_diff = ?,
+                        game_length_minutes = ?
                     WHERE match_id = ?
                     """,
                     auxiliary_rows,
@@ -513,7 +545,11 @@ def rebuild_participant_history(
                 SET blue_first_blood = ?,
                     blue_first_tower = ?,
                     blue_dragon_share = ?,
-                    blue_gold_share = ?
+                    blue_gold_share = ?,
+                    blue_dragons = ?,
+                    red_dragons = ?,
+                    gold_diff = ?,
+                    game_length_minutes = ?
                 WHERE match_id = ?
                 """,
                 auxiliary_rows,

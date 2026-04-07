@@ -37,7 +37,7 @@ def main():
         )
         conn.commit()
         print(
-            f"Rebuilt participant history from {matches_processed:,} matches "
+            f"Rebuilt participant history and compact training targets from {matches_processed:,} matches "
             f"into {participants_inserted:,} participant rows."
         )
     except sqlite3.OperationalError as exc:

@@ -2,12 +2,15 @@ import gc
 import os
 import time
 
+import pandas as pd
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
 from ml.data.pytorch_data import GpuCache, LeagueDataset
+from ml.features.recent_history import GLOBAL_FEATURES, PARTICIPANT_FEATURES
 from ml.predictor.unified_model import UnifiedWinPredictorModel
+from ml.runtime_config import get_db_path
 from ml.trainer.feature_pipeline import build_rich_feature_dataframe
 
 try:
@@ -18,6 +21,8 @@ except ImportError:  # pragma: no cover
 
 AUX_TARGET_SCALES = (25000.0, 6.0, 6.0, 45.0)
 AUX_TARGET_WEIGHTS = (0.25, 0.15, 0.15, 0.10)
+FEATURE_CACHE_SCHEMA_VERSION = 1
+DEFAULT_FEATURE_CACHE_PATH = "ml/save_data/unified_feature_cache.pkl"
 
 
 def _compute_multitask_losses(win_logits, aux_predictions, labels, aux_targets, criterion):
@@ -32,36 +37,126 @@ def _compute_multitask_losses(win_logits, aux_predictions, labels, aux_targets, 
     return win_loss + aux_loss, aux_loss
 
 
+def _feature_cache_signature(db_path, queue_id):
+    resolved_db_path = os.path.abspath(db_path)
+    return {
+        "schema_version": FEATURE_CACHE_SCHEMA_VERSION,
+        "db_path": resolved_db_path,
+        "queue_id": queue_id,
+    }
+
+
+def _load_feature_cache(cache_path, *, db_path, queue_id):
+    if not cache_path or not os.path.exists(cache_path):
+        return None
+
+    try:
+        bundle = pd.read_pickle(cache_path)
+    except Exception:
+        return None
+
+    if not isinstance(bundle, dict):
+        return None
+    signature = bundle.get("signature")
+    expected_signature = _feature_cache_signature(db_path, queue_id)
+    if not isinstance(signature, dict):
+        return None
+    compatible_signature = {
+        "schema_version": signature.get("schema_version"),
+        "db_path": signature.get("db_path"),
+        "queue_id": signature.get("queue_id"),
+    }
+    if compatible_signature != expected_signature:
+        return None
+    dataframe = bundle.get("dataframe")
+    champion_list = bundle.get("champion_list")
+    if not isinstance(dataframe, pd.DataFrame) or not isinstance(champion_list, dict):
+        return None
+    return dataframe, champion_list
+
+
+def _save_feature_cache(cache_path, *, dataframe, champion_list, db_path, queue_id):
+    if not cache_path:
+        return
+    cache_dir = os.path.dirname(cache_path)
+    if cache_dir:
+        os.makedirs(cache_dir, exist_ok=True)
+    bundle = {
+        "signature": _feature_cache_signature(db_path, queue_id),
+        "created_at": time.time(),
+        "dataframe": dataframe,
+        "champion_list": champion_list,
+    }
+    pd.to_pickle(bundle, cache_path)
+
+
+def _load_training_dataframe(*, db_path, queue_id, feature_cache_path, refresh_feature_cache):
+    if feature_cache_path and not refresh_feature_cache:
+        cached = _load_feature_cache(feature_cache_path, db_path=db_path, queue_id=queue_id)
+        if cached is not None:
+            print(f"[Unified] Loaded cached feature dataframe from {feature_cache_path}", flush=True)
+            return cached
+
+    started_at = time.time()
+    print("[Unified] Building feature dataframe from SQLite matches...", flush=True)
+    df_matches, champion_list = build_rich_feature_dataframe(db_path=db_path, queue_id=queue_id)
+    print(
+        f"[Unified] Feature dataframe ready in {time.time() - started_at:.1f}s "
+        f"({len(df_matches):,} rows x {len(df_matches.columns):,} columns)",
+        flush=True,
+    )
+    if feature_cache_path:
+        cache_started_at = time.time()
+        _save_feature_cache(
+            feature_cache_path,
+            dataframe=df_matches,
+            champion_list=champion_list,
+            db_path=db_path,
+            queue_id=queue_id,
+        )
+        print(
+            f"[Unified] Saved cached feature dataframe to {feature_cache_path} "
+            f"in {time.time() - cache_started_at:.1f}s",
+            flush=True,
+        )
+    return df_matches, champion_list
+
+
 def run_unified_training(
     num_champions=None,
     embedding_dim=96,
     nhead=4,
     dim_feedforward=256,
     num_layers=2,
-    dropout=0.35,
-    batch_size=1024,
-    epochs=40,
-    lr=5e-4,
-    early_stopping_patience=12,
+    dropout=0.45,
+    batch_size=512,
+    epochs=20,
+    lr=3e-4,
+    weight_decay=0.02,
+    early_stopping_patience=20,
     early_stopping_min_delta=1e-4,
     min_epochs_before_stopping=20,
-    scheduler_patience=3,
+    scheduler_patience=6,
     scheduler_factor=0.5,
-    scheduler_min_lr=1e-5,
+    scheduler_min_lr=2e-5,
     save_path="ml/save_data/best_unified_win_predictor.pth",
+    db_path=None,
+    queue_id=420,
+    feature_cache_path=DEFAULT_FEATURE_CACHE_PATH,
+    refresh_feature_cache=False,
 ):
+    if db_path is None:
+        db_path = get_db_path()
     device = "cuda" if torch.cuda.is_available() else "mps" if torch.backends.mps.is_available() else "cpu"
     amp_enabled = device == "cuda"
     print(f"[Unified] Device: {device}")
     print("Loading pre-match training data...")
 
-    started_at = time.time()
-    print("[Unified] Building feature dataframe from SQLite matches...", flush=True)
-    df_matches, champion_list = build_rich_feature_dataframe()
-    print(
-        f"[Unified] Feature dataframe ready in {time.time() - started_at:.1f}s "
-        f"({len(df_matches):,} rows x {len(df_matches.columns):,} columns)",
-        flush=True,
+    df_matches, champion_list = _load_training_dataframe(
+        db_path=db_path,
+        queue_id=queue_id,
+        feature_cache_path=feature_cache_path,
+        refresh_feature_cache=refresh_feature_cache,
     )
     actual_num_champions = len(champion_list)
     if num_champions is None:
@@ -99,6 +194,8 @@ def run_unified_training(
     model = UnifiedWinPredictorModel(
         num_champions=num_champions,
         dense_feature_dim=dense_feature_dim,
+        num_player_features=len(PARTICIPANT_FEATURES),
+        num_global_features=len(GLOBAL_FEATURES),
         num_regions=num_regions,
         embedding_dim=embedding_dim,
         nhead=nhead,
@@ -108,7 +205,7 @@ def run_unified_training(
     ).to(device)
 
     criterion = nn.BCEWithLogitsLoss()
-    optimizer = torch.optim.AdamW(model.parameters(), lr=lr, weight_decay=0.01)
+    optimizer = torch.optim.AdamW(model.parameters(), lr=lr, weight_decay=weight_decay)
     scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
         optimizer,
         mode="min",
@@ -139,7 +236,6 @@ def run_unified_training(
                     batch["role_ids"],
                     batch["team_ids"],
                     dense_features=batch["dense_features"],
-                    blue_side=batch["blue_side"],
                     region_ids=batch["region_ids"],
                     return_aux=True,
                 )
@@ -177,7 +273,6 @@ def run_unified_training(
                         batch["role_ids"],
                         batch["team_ids"],
                         dense_features=batch["dense_features"],
-                        blue_side=batch["blue_side"],
                         region_ids=batch["region_ids"],
                         return_aux=True,
                     )

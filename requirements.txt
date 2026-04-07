@@ -3,6 +3,7 @@ python-dotenv
 torch
 pandas
 numpy
+pyarrow
 pytest
 fastapi
 uvicorn[standard]

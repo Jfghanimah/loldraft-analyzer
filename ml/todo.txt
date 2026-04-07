@@ -10,6 +10,8 @@ post-game stats are allowed only as labels / auxiliary targets, never as inputs
 3. Redesign unified dense features before major model experimentation:
 done: replaced raw totals with pace-adjusted prior-game stats and prior average game length
 done: added region as context
+next: add global champ-role priors from the training population (smoothed champ-role winrate plus pickrate/support) so obviously bad off-role picks are not drowned out by otherwise normal drafts
+note: this likely needs a level-1 / level-2 cache refactor because we do not currently extract and preserve the right population-level champ-role statistics cleanly
 next: add stronger team-level and lane-level delta features instead of only slot-local aggregates
 next: revisit sparse-history defaults so neutral fallback values do not wash out signal
 add train-split-only normalization stats instead of relying only on bounded scaling
@@ -27,10 +29,10 @@ current transformer
 multitask vs win-only
 
 6. Keep the unified model path clean and understandable while tuning:
-dropout
-batch size ceiling
-hidden width
-whether the transformer is actually beating a simpler MLP
+done: removed legacy blue_side usage and manual blue/red summary pooling from the active path
+done: keep per-player history attached to each slot token before self-attention
+next: tune transformer depth/width and post-transformer head size
+next: compare the enriched-token transformer against a simpler enriched-token MLP baseline
 
 7. Once feature shape and target design are stable enough, add caching for fast iteration:
 cache the unified feature matrix / tensors
@@ -41,3 +43,6 @@ avoid recaching every time we tweak the model head
 9. Replace the SQLite-to-RAM training build with cached shards / IterableDataset only if scale demands it again after caching.
 
 10. Defer rank and other external player metadata until we have a production-safe and non-leaky plan.
+
+Local run note:
+The reliable Codex command for live training output is `cmd.exe /c "venv\Scripts\python.exe -m ml.trainer.train"` without a pseudo-terminal. That also writes `ml/save_data/latest_train_log.txt`.

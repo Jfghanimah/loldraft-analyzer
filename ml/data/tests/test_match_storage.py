@@ -28,6 +28,10 @@ def test_ensure_match_schema_adds_richer_columns(tmp_path):
     assert "blue_first_tower" in columns
     assert "blue_dragon_share" in columns
     assert "blue_gold_share" in columns
+    assert "blue_dragons" in columns
+    assert "red_dragons" in columns
+    assert "gold_diff" in columns
+    assert "game_length_minutes" in columns
     assert "last_updated_ts" in columns
     match_indexes = {row[1] for row in conn.execute("PRAGMA index_list(matches)").fetchall()}
     assert "idx_matches_queue_game_match" in match_indexes
@@ -115,7 +119,8 @@ def test_upsert_match_record_persists_raw_and_ordered_payloads(tmp_path):
     row = conn.execute(
         """
         SELECT region, raw_match_json, ordered_match_json, rank_snapshot_json, game_version, queue_id,
-               blue_first_blood, blue_first_tower, blue_dragon_share, blue_gold_share
+               blue_first_blood, blue_first_tower, blue_dragon_share, blue_gold_share,
+               blue_dragons, red_dragons, gold_diff, game_length_minutes
         FROM matches WHERE match_id = ?
         """,
         ("NA1_1",),
@@ -136,6 +141,10 @@ def test_upsert_match_record_persists_raw_and_ordered_payloads(tmp_path):
     assert row[7] == 1
     assert row[8] == 0.75
     assert row[9] > 0.5
+    assert row[10] == 3
+    assert row[11] == 1
+    assert row[12] == 11500.0
+    assert row[13] == 1.0
     assert len(participant_rows) == 10
     assert participant_rows[0] == ("p4", "Ashe", "BOTTOM", 100, 1, 13000.0, 0.0)
 

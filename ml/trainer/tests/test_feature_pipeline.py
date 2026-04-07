@@ -169,9 +169,9 @@ def test_build_rich_feature_dataframe_generates_dense_features_from_prior_matche
 
     assert len(df) == 2
     assert len(champion_list) >= 12
-    assert df.shape[1] == 159
+    assert df.shape[1] == 158
 
-    dense_columns = [column for column in df.columns if column not in {"label", *CHAMPION_COLUMNS, "blue_side", "region_id", *AUX_TARGET_COLUMNS}]
+    dense_columns = [column for column in df.columns if column not in {"label", *CHAMPION_COLUMNS, "region_id", *AUX_TARGET_COLUMNS}]
     dense_sums = sorted(float(df.iloc[i][dense_columns].sum()) for i in range(len(df)))
 
     assert dense_sums[0] >= 0.0
@@ -350,7 +350,7 @@ def test_training_and_prediction_share_recent_history_feature_values(tmp_path):
     )
     conn.close()
 
-    dense_columns = [column for column in df.columns if column not in {"label", *CHAMPION_COLUMNS, "blue_side", "region_id", *AUX_TARGET_COLUMNS}]
+    dense_columns = [column for column in df.columns if column not in {"label", *CHAMPION_COLUMNS, "region_id", *AUX_TARGET_COLUMNS}]
     richer_row = max((df.iloc[i][dense_columns].tolist() for i in range(len(df))), key=sum)
     assert richer_row == prediction_features
 

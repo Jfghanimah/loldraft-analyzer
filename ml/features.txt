@@ -36,10 +36,15 @@
 
   Draft / context features
   - 10 champion IDs (one per slot, role-ordered: Top/Jg/Mid/Bot/Sup × Blue/Red)
-  - 1 blue side indicator (did this team have blue side?)
   - 1 region ID
 
-  Total inputs: 10 champion IDs + 1 blue_side + 1 region_id + 142 dense = 154 inputs
+  Total inputs: 10 champion IDs + 1 region_id + 142 dense = 153 inputs
+
+  Active unified model shape
+  - Build 10 enriched player-slot tokens from champion, role, team, and that slot's history features
+  - Inject shared global context from region and patch into every token
+  - Run Transformer self-attention across all 10 tokens
+  - Flatten the full encoded 10-slot board into multitask prediction heads
 
   Auxiliary training targets
   - win/loss

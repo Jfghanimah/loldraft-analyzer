@@ -119,7 +119,6 @@ class LeagueDataset(Dataset):
         if all(column in dataframe.columns for column in CHAMPION_COLUMNS):
             champion_values = dataframe.loc[:, CHAMPION_COLUMNS].values
             label_values = dataframe.loc[:, "label"].values if "label" in dataframe.columns else dataframe.iloc[:, 0].values
-            blue_side_values = dataframe.loc[:, "blue_side"].values if "blue_side" in dataframe.columns else dataframe.iloc[:, 11].values
             region_values = dataframe.loc[:, "region_id"].values if "region_id" in dataframe.columns else None
             aux_values = dataframe.loc[:, AUX_TARGET_COLUMNS].values if all(
                 column in dataframe.columns for column in AUX_TARGET_COLUMNS
@@ -130,7 +129,6 @@ class LeagueDataset(Dataset):
         else:
             champion_values = dataframe.iloc[:, 1:11].values
             label_values = dataframe.iloc[:, 0].values
-            blue_side_values = dataframe.iloc[:, 11].values
             region_values = None
             aux_values = None
             dense_values = dataframe.iloc[:, 12:].values if dataframe.shape[1] > 12 else None
@@ -141,7 +139,6 @@ class LeagueDataset(Dataset):
         self.mask_token_id = (
             mask_token_id if mask_token_id is not None else int(self.matches.max().item()) + 1
         )
-        self.blue_side = torch.tensor(blue_side_values, dtype=torch.float32)
         self.region_ids = torch.tensor(region_values, dtype=torch.long) if region_values is not None else None
         self.aux_targets = torch.tensor(aux_values, dtype=torch.float32) if aux_values is not None else None
         self.has_dense_features = dense_values is not None and dense_values.shape[1] > 0
@@ -166,7 +163,6 @@ class LeagueDataset(Dataset):
                 'role_ids': self.role_ids,
                 'team_ids': self.team_ids,
                 'label': self.labels[idx],
-                'blue_side': self.blue_side[idx],
                 'region_id': self.region_ids[idx] if self.region_ids is not None else None,
                 'aux_targets': self.aux_targets[idx] if self.aux_targets is not None else None,
                 'dense_features': self.dense_features[idx] if self.has_dense_features else None,
@@ -204,9 +200,6 @@ class GpuCache:
             labels = dataset.labels.to(device)
             self.train_labels = labels[train_idx].contiguous()
             self.val_labels   = labels[val_idx].contiguous()
-            blue_side = dataset.blue_side.to(device)
-            self.train_blue_side = blue_side[train_idx].contiguous()
-            self.val_blue_side   = blue_side[val_idx].contiguous()
             if dataset.region_ids is not None:
                 region_ids = dataset.region_ids.to(device)
                 self.train_region_ids = region_ids[train_idx].contiguous()
@@ -249,7 +242,6 @@ class GpuCache:
 
             if self.mode == 'finetune':
                 labels = self.train_labels if split == 'train' else self.val_labels
-                blue_side = self.train_blue_side if split == 'train' else self.val_blue_side
                 region_ids = self.train_region_ids if split == 'train' else self.val_region_ids
                 aux_targets = self.train_aux_targets if split == 'train' else self.val_aux_targets
                 dense_features = self.train_dense_features if split == 'train' else self.val_dense_features
@@ -259,7 +251,6 @@ class GpuCache:
                     'role_ids':     self.role_ids.unsqueeze(0).expand(bs, -1),
                     'team_ids':     self.team_ids.unsqueeze(0).expand(bs, -1),
                     'label':        labels[b].unsqueeze(1),
-                    'blue_side':    blue_side[b].unsqueeze(1),
                     'region_ids':   region_ids[b] if region_ids is not None else None,
                     'aux_targets':  aux_targets[b] if aux_targets is not None else None,
                     'dense_features': dense_features[b] if self.has_dense_features else None,

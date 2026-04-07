@@ -1,0 +1,48 @@
+==================================================
+Training Unified Win Predictor
+==================================================
+[Unified] Writing training log to ml/save_data/latest_train_log.txt
+[Unified] Device: cuda
+Loading pre-match training data...
+[Unified] Loaded cached feature dataframe from ml/save_data/unified_feature_cache.pkl
+[Unified] Converting feature dataframe to torch tensors...
+[Unified] Torch dataset ready in 0.3s
+[Unified] Caching train/val tensors on cuda...
+[Unified] Tensor cache ready in 0.3s
+[Unified] Champion vocab: 172
+[Unified] Regions: 3
+[Unified] Dense feature dim: 142
+[Unified] Model: dim=96, heads=4, layers=3, ff=256, dropout=0.50
+Train: 385,923 | Val: 42,881 (cached on cuda)
+Epoch 1/20 | Train Loss: 0.7268 | Val Loss: 0.7215 | Train Aux: 0.0323 | Val Aux: 0.0301 | Train Acc: 0.5058 | Val Acc: 0.5241 | LR: 0.000300 | Time: 17.2s
+--> New Best Val Loss (0.7215) saved to 'ml/save_data/best_unified_win_predictor.pth'
+Epoch 2/20 | Train Loss: 0.7172 | Val Loss: 0.7109 | Train Aux: 0.0289 | Val Aux: 0.0294 | Train Acc: 0.5385 | Val Acc: 0.5598 | LR: 0.000300 | Time: 17.0s
+--> New Best Val Loss (0.7109) saved to 'ml/save_data/best_unified_win_predictor.pth'
+Epoch 3/20 | Train Loss: 0.7131 | Val Loss: 0.7111 | Train Aux: 0.0287 | Val Aux: 0.0285 | Train Acc: 0.5524 | Val Acc: 0.5547 | LR: 0.000300 | Time: 17.0s
+Epoch 4/20 | Train Loss: 0.7115 | Val Loss: 0.7091 | Train Aux: 0.0286 | Val Aux: 0.0289 | Train Acc: 0.5566 | Val Acc: 0.5631 | LR: 0.000300 | Time: 17.0s
+--> New Best Val Loss (0.7091) saved to 'ml/save_data/best_unified_win_predictor.pth'
+Epoch 5/20 | Train Loss: 0.7102 | Val Loss: 0.7080 | Train Aux: 0.0286 | Val Aux: 0.0284 | Train Acc: 0.5594 | Val Acc: 0.5669 | LR: 0.000300 | Time: 20.2s
+--> New Best Val Loss (0.7080) saved to 'ml/save_data/best_unified_win_predictor.pth'
+Epoch 6/20 | Train Loss: 0.7094 | Val Loss: 0.7075 | Train Aux: 0.0285 | Val Aux: 0.0289 | Train Acc: 0.5616 | Val Acc: 0.5669 | LR: 0.000300 | Time: 17.1s
+--> New Best Val Loss (0.7075) saved to 'ml/save_data/best_unified_win_predictor.pth'
+Epoch 7/20 | Train Loss: 0.7087 | Val Loss: 0.7062 | Train Aux: 0.0284 | Val Aux: 0.0283 | Train Acc: 0.5625 | Val Acc: 0.5672 | LR: 0.000300 | Time: 17.2s
+--> New Best Val Loss (0.7062) saved to 'ml/save_data/best_unified_win_predictor.pth'
+Epoch 8/20 | Train Loss: 0.7083 | Val Loss: 0.7062 | Train Aux: 0.0284 | Val Aux: 0.0280 | Train Acc: 0.5637 | Val Acc: 0.5682 | LR: 0.000300 | Time: 17.2s
+Epoch 9/20 | Train Loss: 0.7076 | Val Loss: 0.7062 | Train Aux: 0.0284 | Val Aux: 0.0281 | Train Acc: 0.5659 | Val Acc: 0.5672 | LR: 0.000300 | Time: 17.2s
+Epoch 10/20 | Train Loss: 0.7071 | Val Loss: 0.7058 | Train Aux: 0.0283 | Val Aux: 0.0279 | Train Acc: 0.5664 | Val Acc: 0.5680 | LR: 0.000300 | Time: 17.2s
+--> New Best Val Loss (0.7058) saved to 'ml/save_data/best_unified_win_predictor.pth'
+Epoch 11/20 | Train Loss: 0.7063 | Val Loss: 0.7054 | Train Aux: 0.0283 | Val Aux: 0.0278 | Train Acc: 0.5678 | Val Acc: 0.5700 | LR: 0.000300 | Time: 17.3s
+--> New Best Val Loss (0.7054) saved to 'ml/save_data/best_unified_win_predictor.pth'
+Epoch 12/20 | Train Loss: 0.7060 | Val Loss: 0.7055 | Train Aux: 0.0282 | Val Aux: 0.0277 | Train Acc: 0.5685 | Val Acc: 0.5681 | LR: 0.000300 | Time: 17.2s
+Epoch 13/20 | Train Loss: 0.7057 | Val Loss: 0.7050 | Train Aux: 0.0282 | Val Aux: 0.0277 | Train Acc: 0.5697 | Val Acc: 0.5699 | LR: 0.000300 | Time: 17.4s
+--> New Best Val Loss (0.7050) saved to 'ml/save_data/best_unified_win_predictor.pth'
+Epoch 14/20 | Train Loss: 0.7052 | Val Loss: 0.7054 | Train Aux: 0.0281 | Val Aux: 0.0278 | Train Acc: 0.5705 | Val Acc: 0.5686 | LR: 0.000300 | Time: 17.1s
+Epoch 15/20 | Train Loss: 0.7044 | Val Loss: 0.7058 | Train Aux: 0.0281 | Val Aux: 0.0278 | Train Acc: 0.5720 | Val Acc: 0.5679 | LR: 0.000300 | Time: 17.2s
+Epoch 16/20 | Train Loss: 0.7040 | Val Loss: 0.7055 | Train Aux: 0.0281 | Val Aux: 0.0278 | Train Acc: 0.5725 | Val Acc: 0.5700 | LR: 0.000300 | Time: 17.1s
+Epoch 17/20 | Train Loss: 0.7033 | Val Loss: 0.7063 | Train Aux: 0.0281 | Val Aux: 0.0278 | Train Acc: 0.5744 | Val Acc: 0.5692 | LR: 0.000300 | Time: 16.9s
+Epoch 18/20 | Train Loss: 0.7028 | Val Loss: 0.7052 | Train Aux: 0.0280 | Val Aux: 0.0278 | Train Acc: 0.5754 | Val Acc: 0.5677 | LR: 0.000300 | Time: 17.0s
+Epoch 19/20 | Train Loss: 0.7023 | Val Loss: 0.7047 | Train Aux: 0.0280 | Val Aux: 0.0277 | Train Acc: 0.5757 | Val Acc: 0.5714 | LR: 0.000300 | Time: 17.0s
+--> New Best Val Loss (0.7047) saved to 'ml/save_data/best_unified_win_predictor.pth'
+Epoch 20/20 | Train Loss: 0.7009 | Val Loss: 0.7064 | Train Aux: 0.0280 | Val Aux: 0.0277 | Train Acc: 0.5785 | Val Acc: 0.5680 | LR: 0.000300 | Time: 17.0s
+
+Done.

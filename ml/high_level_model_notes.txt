@@ -1,0 +1,53 @@
+HIGH LEVEL MODEL NOTES
+
+Data / scale
+- The current dataset size is large enough to learn broad draft and player-history signal, but it is still too small for many specific matchup truths to emerge reliably.
+- Internet-scale matchup facts can disappear quickly at our scale. Example intuition: if a matchup appears ~26,000 times in 250M games, that only implies ~40 occurrences in a 400k-game dataset.
+- Dataset growth has been one of the strongest levers so far. Doubling the data has repeatedly yielded roughly 1-2% validation gains.
+
+Training pipeline
+- The main repeated-run speed win came from caching the fully built feature dataframe; model-only tuning should not rebuild Phase 2.
+- The reliable local Codex training command is:
+  cmd.exe /c "venv\Scripts\python.exe -m ml.trainer.train"
+- Live stdout from Windows training under this harness is flaky through PowerShell and pseudo-terminals; plain cmd.exe with buffered output works better.
+
+Current model behavior
+- The current enriched-token transformer is learning real signal and is not just random noise.
+- The model can clearly overfit / memorize, so capacity is not the main blocker.
+- The practical issue is generalization: validation tends to peak early and then drift down.
+- In a local 5-run hyperparameter sweep, the model plateaued around ~57.0-57.1% validation accuracy.
+- Simple local tuning of width, depth, batch size, and dropout did not uncover a clean path to 58%+ on the current cached feature set.
+
+Auxiliary tasks
+- Auxiliary heads are currently weak.
+- gold_diff is only barely better than a mean predictor.
+- red_dragons is basically mean-predicting.
+- game_length is also close to a mean predictor.
+- The win head is carrying most of the useful predictive performance right now.
+- Do not assume lower aux loss means the aux outputs are rich or realistic; inspect them directly.
+
+Off-meta / role-sensitive picks
+- The dataset does contain meaningful numbers of certain weak champ-role combinations, e.g. Azir mid, Shyvana top, Lee Sin top, Twitch jungle, Corki mid, Twitch support.
+- The model does learn some of these, but it still under-penalizes several bad off-role cases, especially picks like Twitch jungle/support and Lee Sin top.
+- This suggests the model sees role information but is not learning champion-role interaction strongly enough.
+
+Feature ideas
+- A global champ-role prior (smoothed champ-role winrate plus pickrate/support) is likely worth adding later.
+- This is attractive even if it does not move global validation accuracy much, because it should improve product trust on obviously troll or off-role drafts.
+- This likely requires a level-1 / level-2 cache refactor before implementation.
+
+LUT caution
+- Broad champ-role priors are probably acceptable.
+- Detailed matchup LUTs are much riskier.
+- If strong matchup LUTs are fed directly into the model, the model may learn to pass them through instead of developing more general champion interaction understanding.
+- The safer long-term goal is for the model to generalize matchup logic from champion attributes and broader context, not just memorize a giant table.
+
+Good future sanity tests
+- Hold out an obvious counter matchup entirely (example style: remove a clear counter pair from training) and check whether the model still predicts the correct direction.
+- Compare model aux outputs against a dumb mean baseline during training, not just aggregate aux loss.
+- Inspect real sample drafts for known bad off-role picks to see whether predicted win probability moves the way a human would expect.
+
+Current strategic read
+- More data still matters a lot.
+- Broad priors may help edge-case realism.
+- Small hyperparameter tweaks alone are unlikely to unlock a big jump to 60% from the current feature/cache state.
