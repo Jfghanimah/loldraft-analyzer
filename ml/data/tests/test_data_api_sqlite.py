@@ -4,6 +4,7 @@ import sqlite3
 import pytest
 
 import ml.data.data_api_sqlite as data_api_sqlite
+from ml.data.compact_parquet import CompactParquetWriter
 from ml.data.match_storage import ensure_match_schema
 
 
@@ -91,6 +92,7 @@ class FakeLolWatcher:
 def make_conn():
     conn = sqlite3.connect(":memory:")
     ensure_match_schema(conn)
+    data_api_sqlite.ensure_collector_state_schema(conn)
     conn.execute("CREATE TABLE match_queue_na1 (match_id TEXT PRIMARY KEY)")
     conn.execute("CREATE TABLE puuid_queue_na1 (puuid TEXT PRIMARY KEY)")
     conn.execute("CREATE TABLE processed_puuids_na1 (puuid TEXT PRIMARY KEY)")
@@ -149,6 +151,7 @@ def test_seed_if_needed_adds_seed_player_when_region_queues_are_empty(patch_watc
 def test_process_region_fetches_match_stores_raw_and_ordered_data(patch_watchers):
     conn = make_conn()
     conn.execute("INSERT INTO match_queue_na1 VALUES (?)", ("NA1_1",))
+    data_api_sqlite.STORAGE_MODE = "sqlite"
 
     did_work = data_api_sqlite.process_region(
         conn,
@@ -175,6 +178,35 @@ def test_process_region_fetches_match_stores_raw_and_ordered_data(patch_watchers
     assert participant_rows[0] == 10
     assert len(puuids) == 10
     assert patch_watchers["match_api"].by_id_calls == [("americas", "NA1_1")]
+
+
+def test_process_region_compact_mode_marks_seen_without_raw_sqlite_storage(patch_watchers, tmp_path):
+    conn = make_conn()
+    conn.execute("INSERT INTO match_queue_na1 VALUES (?)", ("NA1_1",))
+    data_api_sqlite.STORAGE_MODE = "compact"
+    writer = CompactParquetWriter(tmp_path)
+
+    did_work = data_api_sqlite.process_region(
+        conn,
+        {"platform": "na1", "region": "americas"},
+        compact_writer=writer,
+    )
+
+    stored = conn.execute(
+        "SELECT raw_match_json, ordered_match_json FROM matches WHERE match_id = ?",
+        ("NA1_1",),
+    ).fetchone()
+    seen = conn.execute(
+        "SELECT platform, storage_mode FROM seen_matches WHERE match_id = ?",
+        ("NA1_1",),
+    ).fetchone()
+    written = data_api_sqlite.flush_compact_writer(writer)
+    conn.close()
+
+    assert did_work is True
+    assert stored is None
+    assert seen == ("na1", "compact")
+    assert {item["kind"] for item in written} == {"matches", "participants"}
 
 
 def test_process_region_scans_player_and_queues_unseen_matches(patch_watchers):
@@ -223,6 +255,7 @@ def test_process_region_requeues_match_after_429(monkeypatch):
 def test_process_region_only_fetches_match_data_when_rank_helpers_exist(monkeypatch):
     conn = make_conn()
     conn.execute("INSERT INTO match_queue_na1 VALUES (?)", ("NA1_1",))
+    data_api_sqlite.STORAGE_MODE = "sqlite"
 
     match_api = FakeMatchApi(match=sample_match())
     summoner_api = FakeSummonerApi()

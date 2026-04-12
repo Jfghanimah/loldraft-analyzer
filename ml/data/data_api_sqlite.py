@@ -2,6 +2,8 @@ import time
 import sqlite3
 import signal
 from riotwatcher import LolWatcher, RiotWatcher, ApiError
+from ml.data.compact_parquet import CompactParquetWriter, get_compact_dataset_dir
+from ml.data.compact_records import extract_compact_records
 from ml.data.match_format import try_build_ordered_match_record
 from ml.data.match_storage import (
     connect_sqlite,
@@ -17,6 +19,7 @@ from ml.runtime_config import (
     get_queue_id,
     get_scraper_targets,
     get_start_time,
+    get_storage_mode,
     get_status_interval_sec,
     load_runtime_env,
 )
@@ -30,6 +33,8 @@ QUEUE_ID = get_queue_id()
 START_TIME = get_start_time()
 STATUS_INTERVAL_SEC = get_status_interval_sec()
 TARGETS = get_scraper_targets()
+STORAGE_MODE = get_storage_mode()
+COMPACT_DATASET_DIR = get_compact_dataset_dir()
 
 lol_watcher = None
 riot_watcher = None
@@ -74,7 +79,7 @@ signal.signal(signal.SIGINT, signal_handler)
 
 
 def print_status(conn, started_at, final=False):
-    total_matches = conn.execute("SELECT count(*) FROM matches").fetchone()[0]
+    total_matches = count_seen_matches(conn)
     elapsed = time.time() - started_at
     label = "FINAL" if final else "STATUS"
     print(
@@ -89,6 +94,7 @@ def init_db():
     conn = connect_sqlite(DB_PATH)
     c = conn.cursor()
     ensure_match_schema(conn)
+    ensure_collector_state_schema(conn)
 
     # Create queues for each platform
     for t in TARGETS:
@@ -99,6 +105,59 @@ def init_db():
 
     conn.commit()
     conn.close()
+
+
+def ensure_collector_state_schema(conn):
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS seen_matches (
+            match_id TEXT PRIMARY KEY,
+            platform TEXT,
+            storage_mode TEXT,
+            saved_at_ts INTEGER
+        )
+        """
+    )
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_seen_matches_platform ON seen_matches(platform)")
+
+
+def count_seen_matches(conn):
+    try:
+        row = conn.execute(
+            """
+            SELECT count(*) FROM (
+                SELECT match_id FROM seen_matches
+                UNION
+                SELECT match_id FROM matches
+            )
+            """
+        ).fetchone()
+        return int(row[0] or 0) if row else 0
+    except sqlite3.OperationalError:
+        pass
+    try:
+        return int(conn.execute("SELECT count(*) FROM matches").fetchone()[0])
+    except sqlite3.OperationalError:
+        return 0
+
+
+def has_seen_match(conn, match_id):
+    row = conn.execute("SELECT 1 FROM seen_matches WHERE match_id = ?", (match_id,)).fetchone()
+    if row:
+        return True
+    row = conn.execute("SELECT 1 FROM matches WHERE match_id = ?", (match_id,)).fetchone()
+    return bool(row)
+
+
+def mark_seen_match(conn, match_id, platform, storage_mode):
+    conn.execute(
+        """
+        INSERT OR REPLACE INTO seen_matches (match_id, platform, storage_mode, saved_at_ts)
+        VALUES (?, ?, ?, ?)
+        """,
+        (match_id, platform, storage_mode, int(time.time())),
+    )
+
 
 def seed_if_needed(conn, target):
     _, local_riot_watcher = ensure_watchers()
@@ -124,7 +183,38 @@ def seed_if_needed(conn, target):
         except Exception as e:
             print(f"Failed: {e}")
 
-def process_region(conn, target):
+def store_match(conn, match_id, match, platform, ordered_match_data, compact_writer=None):
+    if STORAGE_MODE == "sqlite":
+        payload = extract_storage_payload(
+            match,
+            platform,
+            ordered_match_data,
+            COLLECTOR_ID,
+        )
+        upsert_match_record(conn, match_id, payload)
+        mark_seen_match(conn, match_id, platform, "sqlite")
+        return
+    if STORAGE_MODE != "compact":
+        raise ValueError(f"Unsupported LOL_DRAFT_STORAGE_MODE={STORAGE_MODE!r}. Use 'compact' or 'sqlite'.")
+    batch, reason = extract_compact_records(match, platform, collector_id=COLLECTOR_ID)
+    if batch is None:
+        raise ValueError(reason or f"Could not extract compact records for {match_id}")
+    created_writer = compact_writer is None
+    if compact_writer is None:
+        compact_writer = CompactParquetWriter(COMPACT_DATASET_DIR)
+    compact_writer.add_batch(batch)
+    if created_writer:
+        compact_writer.flush()
+    mark_seen_match(conn, match_id, platform, "compact")
+
+
+def flush_compact_writer(compact_writer):
+    if compact_writer is None or STORAGE_MODE != "compact":
+        return []
+    return compact_writer.flush()
+
+
+def process_region(conn, target, compact_writer=None):
     """Does ONE unit of work for ONE region."""
     local_lol_watcher, _ = ensure_watchers()
     c = conn.cursor()
@@ -139,11 +229,7 @@ def process_region(conn, target):
         mid = row[0]
         c.execute(f"DELETE FROM match_queue_{plat} WHERE match_id=?", (mid,))
 
-        # Skip fully stored matches, but allow refreshes for older/incomplete rows.
-        c.execute("SELECT raw_match_json, ordered_match_json FROM matches WHERE match_id=?", (mid,))
-        existing = c.fetchone()
-        has_full_match = bool(existing and existing[0] and existing[1])
-        if has_full_match:
+        if has_seen_match(conn, mid):
             return False # No API call made
 
         try:
@@ -155,13 +241,7 @@ def process_region(conn, target):
             if match_data is None:
                 print(f"[{plat}] Skipped {mid}: {reason}")
             else:
-                payload = extract_storage_payload(
-                    match,
-                    plat,
-                    match_data,
-                    COLLECTOR_ID,
-                )
-                upsert_match_record(conn, mid, payload)
+                store_match(conn, mid, match, plat, match_data, compact_writer=compact_writer)
                 runtime_stats["matches_saved"] += 1
 
             # Harvest PUUIDs
@@ -203,8 +283,7 @@ def process_region(conn, target):
 
             new_count = 0
             for m in history:
-                c.execute("SELECT 1 FROM matches WHERE match_id=?", (m,))
-                if not c.fetchone():
+                if not has_seen_match(conn, m):
                     c.execute(f"INSERT OR IGNORE INTO match_queue_{plat} VALUES (?)", (m,))
                     new_count += 1
 
@@ -227,6 +306,8 @@ def main():
     ensure_watchers()
     init_db()
     conn = connect_sqlite(DB_PATH)
+    ensure_collector_state_schema(conn)
+    compact_writer = CompactParquetWriter(COMPACT_DATASET_DIR) if STORAGE_MODE == "compact" else None
     started_at = time.time()
     last_status_at = started_at
 
@@ -245,13 +326,14 @@ def main():
                     break
 
                 # Do work for this region
-                did_work = process_region(conn, target)
+                did_work = process_region(conn, target, compact_writer=compact_writer)
 
                 if did_work:
                     ops += 1
 
             # Save periodically
             if ops >= BATCH_SIZE:
+                flush_compact_writer(compact_writer)
                 conn.commit()
                 print("--- Committed Batch ---")
                 print_status(conn, started_at)
@@ -267,6 +349,7 @@ def main():
             # Also helps smooth out the requests
             time.sleep(0.1)
     finally:
+        flush_compact_writer(compact_writer)
         conn.commit()
         print_status(conn, started_at, final=True)
         conn.close()

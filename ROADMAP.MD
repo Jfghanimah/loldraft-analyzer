@@ -117,16 +117,20 @@ This should reduce repeated setup confusion and make future experiments easier t
 
 ## Secondary Priorities
 
-### V2 Data Infrastructure
+### Compact V2 Data Infrastructure
 
-The old thin match format is not good enough for long-term feature work. The project should treat SQLite as a reusable local cache of Riot match data, not just a place to stash a minimal training row.
+The raw-JSON SQLite cache does not scale. The current local database has about 663k games and already takes about 56 GiB, mostly because full Riot match JSON averages roughly 82 KB per game. The next data layer should parse each API response once, keep compact typed facts, and discard raw JSON by default.
 
 Plan:
 
-- collect fresh matches into richer V2 SQLite databases
-- store full raw match payloads alongside ordered training projections
-- support multiple operators scraping independently with separate API keys
-- merge operator databases into a shared training DB on a manual cadence
+- collect fresh matches into compact Parquet datasets under `ml/save_data/lol_dataset_v1/`
+- keep SQLite only for crawler state such as queues, processed PUUIDs, and seen match IDs
+- configure storage mode and compact dataset path in `config/scraper.json`
+- store compact match rows, participant-history rows, and later model-ready training examples as partitioned Parquet
+- discard full raw Riot match JSON after successful compact extraction
+- migrate the existing SQLite DB once using structured columns and `participant_history`, not repeated raw-JSON training reads
+- support multiple operators by merging compact Parquet shard directories and deduplicating by `match_id`
+- process prepared training examples per platform in parallel while preserving chronological order within each platform
 
 ### Scraper / Training Coexistence
 
@@ -177,6 +181,16 @@ Plan:
 - define what gets recorded for each run
 - track model settings, dataset source, validation metric, and artifact path
 - make comparisons across runs easy to interpret
+
+### Compact Training Dataset
+
+The unified trainer should stop rebuilding the dense feature matrix from SQLite on every run. The intended direction is a prepared Parquet dataset:
+
+- compact facts are append-only and reusable
+- model-ready training examples are built from compact facts in chronological order
+- repeated model experiments read the prepared training examples directly
+- feature schema versions and manifests make stale caches explicit
+- unified training can use prepared Parquet through `--training-data-dir`
 
 ## Deferred / Backlog
 

@@ -50,6 +50,7 @@ def main():
     parser.add_argument("--finetune-min-lr", type=float, default=2e-5, help="Minimum LR floor (default: 2e-5)")
     parser.add_argument("--refresh-feature-cache", action="store_true", help="Rebuild the cached feature dataframe before training")
     parser.add_argument("--feature-cache-path", default="ml/save_data/unified_feature_cache.pkl", help="Path to the cached feature dataframe bundle")
+    parser.add_argument("--training-data-dir", default=None, help="Prepared compact Parquet dataset root containing training_examples")
     args = parser.parse_args()
 
     os.makedirs(os.path.dirname(DEFAULT_TRAIN_LOG_PATH), exist_ok=True)
@@ -80,6 +81,7 @@ def main():
                 scheduler_patience=args.finetune_lr_patience,
                 scheduler_factor=args.finetune_lr_factor,
                 scheduler_min_lr=args.finetune_min_lr,
+                training_data_dir=args.training_data_dir,
                 feature_cache_path=args.feature_cache_path,
                 refresh_feature_cache=args.refresh_feature_cache,
             )

@@ -21,6 +21,10 @@ DEFAULT_SCRAPER_CONFIG = {
         "enabled": False,
         "ttl_seconds": 21600,
     },
+    "storage": {
+        "mode": "compact",
+        "compact_dataset_dir": "ml/save_data/lol_dataset_v1",
+    },
 }
 
 
@@ -67,6 +71,20 @@ def get_api_key():
 
 def get_db_path(default="league_data.db"):
     return os.getenv("LOL_DRAFT_DB_PATH", default)
+
+
+def get_storage_mode():
+    env_value = os.getenv("LOL_DRAFT_STORAGE_MODE")
+    if env_value:
+        return env_value.strip().lower()
+    return str(get_scraper_config()["storage"]["mode"]).strip().lower()
+
+
+def get_compact_dataset_dir():
+    return os.getenv(
+        "LOL_DRAFT_DATASET_DIR",
+        str(get_scraper_config()["storage"]["compact_dataset_dir"]),
+    )
 
 
 def get_collector_id():

@@ -143,3 +143,7 @@ dmypy.json
 test_permissions.txt
 sequence_cache.pt
 ml/save_data/unified_feature_cache.pkl
+ml/save_data/lol_dataset_v1/
+ml/save_data/lol_dataset_v1_smoke/
+ml/save_data/lol_dataset_v1_bench/
+ml/save_data/prepared_training_dataset/

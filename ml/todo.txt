@@ -34,13 +34,18 @@ done: keep per-player history attached to each slot token before self-attention
 next: tune transformer depth/width and post-transformer head size
 next: compare the enriched-token transformer against a simpler enriched-token MLP baseline
 
-7. Once feature shape and target design are stable enough, add caching for fast iteration:
-cache the unified feature matrix / tensors
-avoid recaching every time we tweak the model head
+7. Replace raw-JSON SQLite scaling path with compact Parquet:
+done: agreed to discard raw Riot JSON by default after compact extraction
+done: add compact match / participant record extraction and Parquet shard writer scaffolding
+done: add model-ready `training_examples` preparation and unified trainer `--training-data-dir`
+done: make the live scraper compact-first by default via `config/scraper.json`
+done: add platform-level parallelism for `training_examples` preparation
+next: migrate the current SQLite DB into `ml/save_data/lol_dataset_v1/`
+next: compare prepared-Parquet training against the current SQLite-built feature path
 
 8. Done: removed old pretrain/sequence branches and old non-unified trainer paths.
 
-9. Replace the SQLite-to-RAM training build with cached shards / IterableDataset only if scale demands it again after caching.
+9. Replace the SQLite-to-RAM training build with prepared Parquet shards / IterableDataset before collecting millions more games.
 
 10. Defer rank and other external player metadata until we have a production-safe and non-leaky plan.
 

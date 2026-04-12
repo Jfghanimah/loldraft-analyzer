@@ -26,5 +26,9 @@
   "rank_snapshots": {
     "enabled": false,
     "ttl_seconds": 21600
+  },
+  "storage": {
+    "mode": "compact",
+    "compact_dataset_dir": "ml/save_data/lol_dataset_v1"
   }
 }

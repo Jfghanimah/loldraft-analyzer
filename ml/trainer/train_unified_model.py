@@ -8,6 +8,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 from ml.data.pytorch_data import GpuCache, LeagueDataset
+from ml.data.prepare_training_examples import load_training_examples_dataframe
 from ml.features.recent_history import GLOBAL_FEATURES, PARTICIPANT_FEATURES
 from ml.predictor.unified_model import UnifiedWinPredictorModel
 from ml.runtime_config import get_db_path
@@ -90,7 +91,18 @@ def _save_feature_cache(cache_path, *, dataframe, champion_list, db_path, queue_
     pd.to_pickle(bundle, cache_path)
 
 
-def _load_training_dataframe(*, db_path, queue_id, feature_cache_path, refresh_feature_cache):
+def _load_training_dataframe(*, db_path, queue_id, feature_cache_path, refresh_feature_cache, training_data_dir=None):
+    if training_data_dir:
+        started_at = time.time()
+        print(f"[Unified] Loading prepared training examples from {training_data_dir}...", flush=True)
+        df_matches, champion_list = load_training_examples_dataframe(training_data_dir, queue_id=queue_id)
+        print(
+            f"[Unified] Prepared training examples ready in {time.time() - started_at:.1f}s "
+            f"({len(df_matches):,} rows x {len(df_matches.columns):,} columns)",
+            flush=True,
+        )
+        return df_matches, champion_list
+
     if feature_cache_path and not refresh_feature_cache:
         cached = _load_feature_cache(feature_cache_path, db_path=db_path, queue_id=queue_id)
         if cached is not None:
@@ -142,6 +154,7 @@ def run_unified_training(
     save_path="ml/save_data/best_unified_win_predictor.pth",
     db_path=None,
     queue_id=420,
+    training_data_dir=None,
     feature_cache_path=DEFAULT_FEATURE_CACHE_PATH,
     refresh_feature_cache=False,
 ):
@@ -157,6 +170,7 @@ def run_unified_training(
         queue_id=queue_id,
         feature_cache_path=feature_cache_path,
         refresh_feature_cache=refresh_feature_cache,
+        training_data_dir=training_data_dir,
     )
     actual_num_champions = len(champion_list)
     if num_champions is None:

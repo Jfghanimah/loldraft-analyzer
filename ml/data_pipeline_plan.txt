@@ -1,349 +1,131 @@
-Data Pipeline Stabilization Plan
-================================
+Compact Data Pipeline Plan
+==========================
 
 Goal
 ----
-Make unified training on the large SQLite dataset reliable and fast enough to run without exhausting 32 GB RAM or thrashing the NVMe/pagefile.
+Scale to millions of League matches without using SQLite as a raw Riot JSON blob store.
 
-This document is a working plan for the next phase of investigation and implementation. It combines:
-- direct code-path analysis from the current trainer
-- the runtime symptoms observed during the long training stall
-- partner analysis about `.fetchall()`, memory blow-up, and storage thrash
+Current measured state:
+- `league_data_v2_joseph.db` has 662,952 matches and 6,629,520 participant-history rows.
+- The SQLite file is 55.82 GiB.
+- A 2,000-match sample averaged about 81.8 KB for `raw_match_json` and about 323 bytes for `ordered_match_json`.
+
+Conclusion:
+- Raw JSON dominates disk usage and repeated preprocessing time.
+- The sustainable path is compact typed facts plus prepared training examples, not bigger raw caches.
+
+
+Design
+------
+1. Parse each Riot API match response once.
+2. Extract compact match and participant facts.
+3. Discard full raw JSON after successful extraction.
+4. Store compact facts in partitioned Parquet under `ml/save_data/lol_dataset_v1/`.
+5. Keep SQLite only for small crawler state: queues, processed PUUIDs, seen match IDs, and manifests.
+6. Build model-ready `training_examples` Parquet from compact facts in chronological order.
+7. Train from prepared Parquet instead of rebuilding dense features from SQLite every run.
+
+
+Compact Facts To Keep
+---------------------
+Match rows:
+- match ID, platform, queue, patch, timestamps, UTC game date, duration, winner
+- 10 role-ordered champion slots and champion IDs when available
+- objective outcomes: dragons, barons, heralds, towers, inhibitors, first blood, first tower
+- gold differential and basic auxiliary targets
+
+Participant rows:
+- match ID, PUUID, slot, side, team, role, champion, win
+- K/D/A, vision, champion damage, healing, gold, CS
+- duration-normalized rates such as DPM, GPM, CSPM, VSPM, HPM
+
+Prepared training examples:
+- label, champion IDs, region ID, auxiliary targets
+- dense recent-history feature vector built using only prior matches
+
+
+Data To Discard By Default
+--------------------------
+- full raw Riot match JSON
+- timelines and event streams
+- items, perks/runes, challenges, and incidental Riot fields
+- any future feature source that is not explicitly added to the compact schema
+
+If future experiments require discarded data, refetch a targeted sample or add an optional cold archive outside the default SSD path.
 
 
 Implementation Status
 ---------------------
-Implemented in the first refactor tranche:
-- unified feature build now streams matches and participant history instead of bulk `.fetchall()` materialization
-- `raw_match_json` is now fetched lazily per missing match instead of being loaded for the whole corpus
-- champion syncing now scans ordered matches without storing all parsed records
-- unified feature rows are accumulated in a numeric matrix instead of a giant Python list-of-lists
-- training-oriented composite indexes were added for `matches` and `participant_history`
-- unified trainer now frees the DataFrame and intermediate dataset earlier to reduce overlapping memory usage
-
-Still pending from the broader plan:
-- unified feature/tensor cache
-- deeper `RecentHistoryStore` compaction or eviction strategy
-- optional large-dataset mode split
-- similar streaming treatment for other heavy pipelines if needed
-
-
-Current Symptoms
-----------------
-- Unified training appears to stall after:
-  `Training Unified Win Predictor`
-  `[Unified] Device: cuda`
-  `Loading pre-match training data...`
-- 32 GB RAM becomes fully consumed during startup.
-- NVMe active time hits 100%.
-- The training DB is about 19.8 GB locally.
-- Likely outcome: Windows pages heavily while Python materializes too much data at once.
-
-
-High-Confidence Root Causes
----------------------------
-1. Full-table materialization with `.fetchall()`
-   In `ml/trainer/feature_pipeline.py`, both `_load_training_matches()` and `_load_participant_history_rows_by_match()` load entire result sets into Python memory.
-
-   Why this is bad:
-   - `raw_match_json` is large and is currently selected for every row.
-   - Python object overhead makes in-memory size much larger than the SQLite on-disk size.
-   - Once RAM fills, the OS spills to pagefile, which explains the SSD thrash.
-
-2. Multiple full-size copies of the same logical dataset
-   The current unified pipeline builds several large structures in sequence or overlap:
-   - `rows`
-   - `ordered_records`
-   - `participant_rows_by_match`
-   - `converted_rows`
-   - Pandas DataFrame
-   - torch tensors
-
-   This likely causes very high peak memory, not just high steady-state memory.
-
-3. `raw_match_json` is being loaded eagerly even though it is fallback-only
-   The current query fetches `raw_match_json` for every match, but it is only used when `participant_history` is missing for a match.
-
-4. `participant_history` is copied into a giant Python dict
-   `_load_participant_history_rows_by_match()` currently turns the full table into a `match_id -> list[dict]` structure. This is almost certainly one of the biggest RAM consumers.
-
-5. `RecentHistoryStore` grows with dataset cardinality
-   `RecentHistoryStore._rows_by_puuid` accumulates one deque per encountered player. This may not be the primary failure point, but it increases memory pressure across very large corpora.
-
-6. Query/index mismatch likely causes expensive SQLite work
-   The training read path orders participant rows by queue/time/match/team/role, but the existing indexes in `ml/data/match_storage.py` are focused on `puuid`-driven lookups.
-
-   Likely effect:
-   - SQLite may be scanning and sorting large parts of `participant_history`.
-   - That can increase disk activity significantly before Python even finishes loading.
-
-   Note:
-   I was not able to get a reliable `EXPLAIN QUERY PLAN` from the live DB in this environment because SQLite returned a disk I/O error, so this specific point is still an inference from the code and index layout.
-
-
-Code Areas Most Relevant
-------------------------
-- `ml/trainer/feature_pipeline.py`
-  - `_load_training_matches()`
-  - `_load_participant_history_rows_by_match()`
-  - `build_rich_feature_dataframe()`
-
-- `ml/data/pytorch_data.py`
-  - `LeagueDataset`
-  - `GpuCache`
-
-- `ml/data/match_storage.py`
-  - participant-history schema and indexes
-  - `connect_sqlite()`
-
-
-Working Theory
---------------
-The training startup is currently memory-bound first and storage-bound second.
-
-More specifically:
-- SQLite reads a very large amount of data.
-- Python immediately inflates that data into multiple huge in-memory object graphs.
-- Memory pressure becomes severe.
-- Windows pages aggressively to disk.
-- Disk saturation slows all further progress, making the process appear hung.
-
-CPU may still be doing work, but it is probably not the main bottleneck during the stall.
-
-
-Design Principles for the Fix
------------------------------
-1. Stream, do not materialize.
-2. Avoid loading large JSON unless it is strictly needed.
-3. Keep only the minimum working set in RAM.
-4. Prefer sequential reads over repeated random lookups when processing large corpora.
-5. Separate one-time ETL from repeated training runs.
-6. Validate each optimization with measurements before stacking the next one.
-
-
-Phased Plan
------------
-Phase 0: Instrumentation and Baseline
-- Keep the new progress logging already added so we can see where time is going.
-- Add explicit memory-friendly timing checkpoints around:
-  - match-row read
-  - participant-history read
-  - champion sync
-  - feature generation
-  - DataFrame creation
-  - tensor conversion
-  - GPU cache creation
-- Capture baseline metrics for one representative training run:
-  - total startup time before epoch 1
-  - peak RAM
-  - SSD active time
-  - rows processed per second during feature build
-
-Success criteria:
-- We can clearly identify where peak RAM and peak wall time occur.
-
-
-Phase 1: Remove the biggest avoidable waste
-- Stop selecting `raw_match_json` in the main bulk match query.
-- Treat `raw_match_json` as an on-demand fallback only.
-- If a match is missing `participant_history`, fetch that match's raw JSON separately by `match_id`.
-
-Expected benefit:
-- Large reduction in startup RAM.
-- Lower initial SQLite read volume.
-- Lower Python JSON parse volume.
-
-Implementation notes:
-- Change `_load_training_matches()` to return only:
-  - `match_id`
-  - `ordered_match_json`
-  - `game_creation`
-  - `game_version`
-- Add a targeted helper for fallback raw-match lookup by `match_id`.
-
-Success criteria:
-- Measurable drop in peak RAM during match loading.
-
-
-Phase 2: Eliminate `.fetchall()` for the main training path
-- Replace full-result `fetchall()` usage with streaming cursor iteration.
-- Do not build giant Python lists or dicts for the whole corpus.
-
-Two viable approaches:
-
-Approach A: Two-pass streaming
-- First pass: stream `ordered_match_json` only to discover champions and sync champion IDs.
-- Second pass: stream matches in time order and build features incrementally.
-
-Approach B: Single coordinated streaming pass
-- Open one cursor over ordered matches.
-- Open one cursor over participant-history rows ordered the same way.
-- Advance both in lockstep by `match_id` / time order.
-- Assemble one match at a time.
-
-Recommendation:
-- Start with Approach A if we want lower implementation risk.
-- Move to Approach B if memory is still too high or if we want the cleanest long-term design.
-
-Success criteria:
-- Peak RAM no longer scales linearly with total DB size in the same catastrophic way.
-
-
-Phase 3: Remove `participant_rows_by_match` as a full in-memory structure
-- Replace the current full-table `participant_history` dict with one of:
-  - a streaming merge against matches
-  - a bounded rolling buffer keyed by the current match only
-
-Important detail:
-- Because matches are already processed in chronological order, we should only need the participant rows for the current match plus recent per-player history.
-
-Expected benefit:
-- Very large RAM reduction.
-
-
-Phase 4: Revisit `RecentHistoryStore`
-- Audit growth of `_rows_by_puuid`.
-- Decide whether we can evict old players that are no longer relevant during a strictly time-ordered pass.
-- Consider a more compact representation than Python dict + deque + row dicts.
-
-Possible improvements:
-- store tuples instead of dicts
-- store only numeric aggregates instead of full rows
-- evict players whose history window can no longer affect future rows
-
-Note:
-- This is probably not the first fix to make, but it may become the next limiter after streaming is in place.
-
-
-Phase 5: Add training-oriented SQLite indexes
-- Add or test indexes that support the training read order directly.
-
-Candidates to evaluate:
-- `participant_history(queue_id, game_creation, match_id, team_id)`
-- `matches(queue_id, game_creation, match_id)`
-
-Possible refinement:
-- Avoid SQL ordering by computed `CASE role ...`.
-- Instead, fetch the 10 participant rows for a match and sort role order in Python.
-
-Expected benefit:
-- Less SQLite temp sorting.
-- Lower disk churn.
-- Faster streaming pass.
-
-Validation task:
-- Run `EXPLAIN QUERY PLAN` before and after index changes on the real DB.
-
-
-Phase 6: Split feature ETL from model training
-- Cache the unified feature matrix or prebuilt tensors to disk, similar in spirit to the sequence cache.
-- Fingerprint cache inputs using:
-  - DB path
-  - DB modification state or row counts
-  - queue ID
-  - feature schema version
-  - champion map version
-
-Expected benefit:
-- Expensive preprocessing runs once, not on every train.
-- Iterating on model architecture becomes much cheaper.
-
-This is likely a major quality-of-life improvement even after streaming fixes land.
-
-
-Phase 7: Reconsider full-dataset `GpuCache`
-- Current `GpuCache` duplicates tensors into train/val partitions and assumes full-dataset residency is fine.
-- That may still be okay once preprocessing is fixed, but we should verify.
-
-Options if needed:
-- keep tensors on CPU and batch-transfer
-- use memmap / on-disk arrays
-- pre-shard data
-- use a more conventional DataLoader pipeline for the large dataset path
-
-Important:
-- This is probably not the first issue causing the observed stall, because the run appears to be getting stuck before normal training begins.
-
-
-Execution Order Recommendation
-------------------------------
-Recommended order for actual code changes:
-
-1. Lazy `raw_match_json` fallback only
-2. Remove `.fetchall()` from match loading
-3. Remove `.fetchall()` from participant-history loading
-4. Replace `participant_rows_by_match` with streaming or merge-pass logic
-5. Add training-specific indexes
-6. Add unified feature/tensor cache
-7. Reassess `RecentHistoryStore`
-8. Reassess `GpuCache`
-
-Rationale:
-- Steps 1 through 4 attack the highest-probability causes of the RAM/pagefile failure.
-- Steps 5 through 6 improve disk efficiency and developer iteration speed.
-- Steps 7 through 8 are important but should be guided by post-fix profiling.
-
-
-Open Questions to Refine Before Implementation
-----------------------------------------------
-1. Is `participant_history` fully backfilled for the training DB?
-   If yes, we may be able to remove raw-JSON fallback entirely from the unified trainer.
-
-2. Do we want the unified trainer to support partially backfilled DBs, or should training require a prepared DB?
-   Requiring a prepared DB would simplify the runtime path a lot.
-
-3. How many total matches are in the current 19.8 GB DB?
-   We should record:
-   - total `matches`
-   - total `participant_history` rows
-   - average `raw_match_json` size
-   - average `ordered_match_json` size
-
-4. Where is the DB physically located during the problematic run?
-   If it is on a Windows filesystem being accessed from WSL, that may worsen SQLite behavior.
-
-5. Do we want a "large dataset mode" separate from the small/local-dev path?
-   That may let us keep simpler code for small DBs while making the large path robust.
-
-
-Immediate Investigation Tasks
------------------------------
-Before implementing the deeper refactor, collect:
-- `EXPLAIN QUERY PLAN` for:
-  - main match query
-  - participant-history training query
-- row counts and approximate blob sizes:
-  - `count(*)` from `matches`
-  - `count(*)` from `participant_history`
-  - `sum(length(raw_match_json))`
-  - `sum(length(ordered_match_json))`
-- confirmation that `participant_history` coverage is near 100% for training matches
-
-If the environment makes SQLite inspection unreliable from WSL, run these checks from native Windows Python or the SQLite CLI.
-
-
-Definition of Done for the Refactor
------------------------------------
-We should consider this pipeline fix successful when:
-- unified training reaches epoch 1 without exhausting 32 GB RAM
-- SSD/pagefile thrash is no longer the dominant startup behavior
-- preprocessing time is predictable and visibly progressing
-- repeated training runs can reuse cached features/tensors where possible
-- the large-dataset path is explicit, documented, and testable
-
-
-Short-Term Recommendation
--------------------------
-If we want the highest-leverage next implementation step, start here:
-
-1. Make `raw_match_json` lazy fallback only.
-2. Convert unified feature building to streaming.
-
-Those two changes are the most likely to turn the current failure mode into something workable.
-
-
-Notes for Future Discussion
----------------------------
-- The sequence pipeline already uses caching; that may be a useful pattern to copy for unified training.
-- If we discover that the DB is accessed across a Windows/WSL boundary, relocating the DB or running the training path natively may itself improve stability.
-- If `participant_history` is complete, training should prefer structured rows over giant JSON blobs entirely.
+Implemented:
+- compact extraction utilities in `ml.data.compact_records`
+- PyArrow-backed compact shard writer scaffolding in `ml.data.compact_parquet`
+- structured SQLite-to-compact migration command in `ml.data.migrate_sqlite_to_compact_parquet`
+- model-ready training example preparation in `ml.data.prepare_training_examples`
+- unified trainer option `--training-data-dir` for prepared compact Parquet
+- storage mode and compact dataset root live in `config/scraper.json`
+- ignore rules for generated compact datasets
+
+Next:
+- install/verify PyArrow in the local venv before running migration
+- run a bounded migration benchmark into a temporary output directory
+- migrate the full current DB once
+- train from prepared Parquet and compare against the current SQLite-built feature path
+
+
+Commands
+--------
+Small migration smoke test:
+
+```bash
+venv/Scripts/python.exe -m ml.data.migrate_sqlite_to_compact_parquet --output-dir ml/save_data/lol_dataset_v1_smoke --limit-matches 1000 --limit-participants 10000 --match-batch-rows 1000 --participant-batch-rows 10000
+```
+
+Full migration:
+
+```bash
+venv/Scripts/python.exe -m ml.data.migrate_sqlite_to_compact_parquet --output-dir ml/save_data/lol_dataset_v1 --max-workers 4
+```
+
+Prepare model-ready training examples:
+
+```bash
+venv/Scripts/python.exe -m ml.data.prepare_training_examples --dataset-dir ml/save_data/lol_dataset_v1 --overwrite --max-workers 3
+```
+
+Train from prepared Parquet:
+
+```bash
+venv/Scripts/python.exe -m ml.trainer.train --training-data-dir ml/save_data/lol_dataset_v1
+```
+
+Scraper storage config:
+
+```json
+"storage": {
+  "mode": "compact",
+  "compact_dataset_dir": "ml/save_data/lol_dataset_v1"
+}
+```
+
+
+Expected Impact
+---------------
+Storage:
+- current 663k games should move from about 56 GiB raw SQLite to low-single-digit GiB compact Parquet
+- 6M games should be plausible on a consumer SSD
+- 60M games may still require larger/cold storage, but should be hundreds of GiB rather than multiple TiB
+
+Time:
+- existing DB migration is a one-time job
+- dense feature preparation becomes a resumable dataset build, not a repeated training startup cost
+- model iteration should read prepared training examples directly
+- migration can parallelize by rowid chunks, but it may remain SSD-bound
+- training-example preparation parallelizes safely by platform because player histories do not cross platforms
+
+
+Guardrails
+----------
+- Do not run long training jobs casually.
+- Do not store generated Parquet datasets in git.
+- Do not use post-game participant facts as model inputs for the same match; they are only history for future matches or auxiliary labels.
+- Keep schema changes versioned and explicit.
