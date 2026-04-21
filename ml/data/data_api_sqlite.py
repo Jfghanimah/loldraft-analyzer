@@ -2,6 +2,7 @@ import time
 import sqlite3
 import signal
 from riotwatcher import LolWatcher, RiotWatcher, ApiError
+from requests.exceptions import RequestException
 from ml.data.compact_parquet import CompactParquetWriter, get_compact_dataset_dir
 from ml.data.compact_records import extract_compact_records
 from ml.data.match_format import try_build_ordered_match_record
@@ -45,6 +46,8 @@ runtime_stats = {
     "players_scanned": 0,
     "api_calls": 0,
 }
+AUTH_ERROR_STATUS_CODES = {401, 403}
+TRANSIENT_REQUEST_SLEEP_SEC = 5
 
 
 def increment_api_calls():
@@ -159,6 +162,44 @@ def mark_seen_match(conn, match_id, platform, storage_mode):
     )
 
 
+def requeue_match(conn, platform, match_id):
+    conn.execute(f"INSERT OR IGNORE INTO match_queue_{platform} VALUES (?)", (match_id,))
+
+
+def requeue_puuid(conn, platform, puuid):
+    conn.execute(f"DELETE FROM processed_puuids_{platform} WHERE puuid = ?", (puuid,))
+    conn.execute(f"INSERT OR IGNORE INTO puuid_queue_{platform} VALUES (?)", (puuid,))
+
+
+def handle_auth_api_error(conn, platform, queue_kind, value, error):
+    global keep_running
+
+    if queue_kind == "match":
+        requeue_match(conn, platform, value)
+    elif queue_kind == "puuid":
+        requeue_puuid(conn, platform, value)
+    else:
+        raise ValueError(f"Unsupported queue_kind={queue_kind!r}")
+
+    keep_running = False
+    print(
+        f"[{platform}] API auth error while fetching {queue_kind} {value}: {error}. "
+        "Requeued and stopping; refresh RIOT_API_KEY before restarting."
+    )
+
+
+def handle_transient_request_error(conn, platform, queue_kind, value, error):
+    if queue_kind == "match":
+        requeue_match(conn, platform, value)
+    elif queue_kind == "puuid":
+        requeue_puuid(conn, platform, value)
+    else:
+        raise ValueError(f"Unsupported queue_kind={queue_kind!r}")
+
+    print(f"[{platform}] Transient network error while fetching {queue_kind} {value}: {error}. Requeued.")
+    time.sleep(TRANSIENT_REQUEST_SLEEP_SEC)
+
+
 def seed_if_needed(conn, target):
     _, local_riot_watcher = ensure_watchers()
     plat = target['platform']
@@ -259,7 +300,10 @@ def process_region(conn, target, compact_writer=None):
         except ApiError as e:
             if e.response.status_code == 429:
                 print(f"[{plat}] Rate Limit 429 (Match). Skipping...")
-                c.execute(f"INSERT OR IGNORE INTO match_queue_{plat} VALUES (?)", (mid,))
+                requeue_match(conn, plat, mid)
+                return False
+            elif e.response.status_code in AUTH_ERROR_STATUS_CODES:
+                handle_auth_api_error(conn, plat, "match", mid, e)
                 return False
             elif e.response.status_code == 404:
                 print(f"[{plat}] Match {mid} missing.")
@@ -267,6 +311,9 @@ def process_region(conn, target, compact_writer=None):
             else:
                 print(f"[{plat}] Error {mid}: {e}")
                 return False
+        except RequestException as e:
+            handle_transient_request_error(conn, plat, "match", mid, e)
+            return False
 
     # 2. If no matches, try to process a PLAYER
     c.execute(f"SELECT puuid FROM puuid_queue_{plat} LIMIT 1")
@@ -294,11 +341,17 @@ def process_region(conn, target, compact_writer=None):
         except ApiError as e:
             if e.response.status_code == 429:
                 print(f"[{plat}] Rate Limit 429 (Player). Skipping...")
-                c.execute(f"INSERT OR IGNORE INTO puuid_queue_{plat} VALUES (?)", (pid,))
+                requeue_puuid(conn, plat, pid)
+                return False
+            elif e.response.status_code in AUTH_ERROR_STATUS_CODES:
+                handle_auth_api_error(conn, plat, "puuid", pid, e)
                 return False
             else:
                 print(f"[{plat}] Error Player: {e}")
                 return False
+        except RequestException as e:
+            handle_transient_request_error(conn, plat, "puuid", pid, e)
+            return False
 
     return False # Nothing to do
 

@@ -24,15 +24,57 @@ AUX_TARGET_SCALES = (25000.0, 6.0, 6.0, 45.0)
 AUX_TARGET_WEIGHTS = (0.25, 0.15, 0.15, 0.10)
 FEATURE_CACHE_SCHEMA_VERSION = 1
 DEFAULT_FEATURE_CACHE_PATH = "ml/save_data/unified_feature_cache.pkl"
+POPULATION_PRIOR_SUFFIXES = ("_champ_role_win_rate", "_champ_role_frequency")
 
 
-def _compute_multitask_losses(win_logits, aux_predictions, labels, aux_targets, criterion):
-    win_loss = criterion(win_logits, labels)
+def _population_prior_columns(dataframe):
+    return [
+        column
+        for column in dataframe.columns
+        if any(column.endswith(suffix) for suffix in POPULATION_PRIOR_SUFFIXES)
+    ]
+
+
+def _drop_population_prior_columns(dataframe):
+    columns = _population_prior_columns(dataframe)
+    if not columns:
+        return dataframe, 0
+    return dataframe.drop(columns=columns), len(columns)
+
+
+def _infer_dense_feature_layout(dense_feature_dim):
+    num_global_features = len(GLOBAL_FEATURES)
+    if dense_feature_dim == 0:
+        return len(PARTICIPANT_FEATURES), num_global_features
+
+    player_feature_dim = dense_feature_dim - num_global_features
+    if player_feature_dim < 0 or player_feature_dim % 10 != 0:
+        raise ValueError(
+            f"Dense feature dim {dense_feature_dim} is incompatible with "
+            f"10 player slots plus {num_global_features} global features."
+        )
+    return player_feature_dim // 10, num_global_features
+
+
+def _compute_multitask_losses(
+    win_logits,
+    aux_predictions,
+    labels,
+    aux_targets,
+    criterion,
+    aux_target_weights=AUX_TARGET_WEIGHTS,
+    label_smoothing=0.0,
+):
+    if label_smoothing:
+        labels_for_loss = labels * (1.0 - 2.0 * label_smoothing) + label_smoothing
+    else:
+        labels_for_loss = labels
+    win_loss = criterion(win_logits, labels_for_loss)
     if aux_predictions is None or aux_targets is None:
         return win_loss, win_loss.new_tensor(0.0)
 
     scales = aux_targets.new_tensor(AUX_TARGET_SCALES)
-    weights = aux_targets.new_tensor(AUX_TARGET_WEIGHTS)
+    weights = aux_targets.new_tensor(aux_target_weights)
     component_losses = F.smooth_l1_loss(aux_predictions / scales, aux_targets / scales, reduction="none").mean(dim=0)
     aux_loss = torch.sum(component_losses * weights)
     return win_loss + aux_loss, aux_loss
@@ -141,6 +183,7 @@ def run_unified_training(
     dim_feedforward=256,
     num_layers=2,
     dropout=0.45,
+    architecture="flat",
     batch_size=512,
     epochs=20,
     lr=3e-4,
@@ -157,9 +200,24 @@ def run_unified_training(
     training_data_dir=None,
     feature_cache_path=DEFAULT_FEATURE_CACHE_PATH,
     refresh_feature_cache=False,
+    selection_metric="val_loss",
+    aux_target_weights=AUX_TARGET_WEIGHTS,
+    seed=42,
+    label_smoothing=0.0,
+    drop_population_priors=False,
 ):
+    if selection_metric not in {"val_loss", "val_acc"}:
+        raise ValueError("selection_metric must be one of: val_loss, val_acc")
+    if len(aux_target_weights) != len(AUX_TARGET_WEIGHTS):
+        raise ValueError(f"aux_target_weights must contain {len(AUX_TARGET_WEIGHTS)} values")
+    if not 0.0 <= label_smoothing < 0.5:
+        raise ValueError("label_smoothing must be in [0.0, 0.5)")
+
     if db_path is None:
         db_path = get_db_path()
+    torch.manual_seed(seed)
+    if torch.cuda.is_available():
+        torch.cuda.manual_seed_all(seed)
     device = "cuda" if torch.cuda.is_available() else "mps" if torch.backends.mps.is_available() else "cpu"
     amp_enabled = device == "cuda"
     print(f"[Unified] Device: {device}")
@@ -172,6 +230,9 @@ def run_unified_training(
         refresh_feature_cache=refresh_feature_cache,
         training_data_dir=training_data_dir,
     )
+    dropped_population_prior_columns = 0
+    if drop_population_priors:
+        df_matches, dropped_population_prior_columns = _drop_population_prior_columns(df_matches)
     actual_num_champions = len(champion_list)
     if num_champions is None:
         num_champions = actual_num_champions
@@ -185,6 +246,7 @@ def run_unified_training(
     print("[Unified] Converting feature dataframe to torch tensors...", flush=True)
     dataset = LeagueDataset(df_matches, mode="finetune")
     dense_feature_dim = dataset.dense_features.shape[1] if dataset.dense_features is not None else 0
+    num_player_features, num_global_features = _infer_dense_feature_layout(dense_feature_dim)
     num_regions = int(dataset.region_ids.max().item()) + 1 if dataset.region_ids is not None and len(dataset.region_ids) else 1
     del df_matches
     gc.collect()
@@ -199,23 +261,30 @@ def run_unified_training(
     print(f"[Unified] Champion vocab: {num_champions}")
     print(f"[Unified] Regions: {num_regions}")
     print(f"[Unified] Dense feature dim: {dense_feature_dim}")
+    print(f"[Unified] Dense layout: player_features={num_player_features}, global_features={num_global_features}")
     print(
-        f"[Unified] Model: dim={embedding_dim}, heads={nhead}, layers={num_layers}, "
+        f"[Unified] Model: architecture={architecture}, dim={embedding_dim}, heads={nhead}, layers={num_layers}, "
         f"ff={dim_feedforward}, dropout={dropout:.2f}"
     )
+    print(f"[Unified] Aux target weights: {tuple(float(weight) for weight in aux_target_weights)}")
+    print(f"[Unified] Checkpoint selection metric: {selection_metric}")
+    print(f"[Unified] Seed: {seed}")
+    print(f"[Unified] Label smoothing: {label_smoothing:.3f}")
+    print(f"[Unified] Drop population priors: {drop_population_priors} ({dropped_population_prior_columns} columns)")
     print(f"Train: {cache.train_size:,} | Val: {cache.val_size:,} (cached on {device})")
 
     model = UnifiedWinPredictorModel(
         num_champions=num_champions,
         dense_feature_dim=dense_feature_dim,
-        num_player_features=len(PARTICIPANT_FEATURES),
-        num_global_features=len(GLOBAL_FEATURES),
+        num_player_features=num_player_features,
+        num_global_features=num_global_features,
         num_regions=num_regions,
         embedding_dim=embedding_dim,
         nhead=nhead,
         dim_feedforward=dim_feedforward,
         num_layers=num_layers,
         dropout=dropout,
+        architecture=architecture,
     ).to(device)
 
     criterion = nn.BCEWithLogitsLoss()
@@ -230,6 +299,7 @@ def run_unified_training(
     scaler = GradScaler(device="cuda", enabled=amp_enabled)
 
     best_val_loss = float("inf")
+    best_checkpoint_value = float("inf") if selection_metric == "val_loss" else -float("inf")
     epochs_without_improvement = 0
     n_train_batches = cache.num_batches("train", batch_size)
     n_val_batches = cache.num_batches("val", batch_size)
@@ -260,6 +330,8 @@ def run_unified_training(
                     labels,
                     batch["aux_targets"],
                     criterion,
+                    aux_target_weights=aux_target_weights,
+                    label_smoothing=label_smoothing,
                 )
 
             scaler.scale(loss).backward()
@@ -297,6 +369,8 @@ def run_unified_training(
                         labels,
                         batch["aux_targets"],
                         criterion,
+                        aux_target_weights=aux_target_weights,
+                        label_smoothing=label_smoothing,
                     )
 
                 val_loss += loss.item()
@@ -325,14 +399,29 @@ def run_unified_training(
             f"Time: {time.time()-t0:.1f}s"
         )
 
-        if avg_val_loss < (best_val_loss - early_stopping_min_delta):
+        val_loss_improved = avg_val_loss < (best_val_loss - early_stopping_min_delta)
+        if val_loss_improved:
             best_val_loss = avg_val_loss
             epochs_without_improvement = 0
-            os.makedirs(os.path.dirname(save_path), exist_ok=True)
-            torch.save(model.state_dict(), save_path)
-            print(f"--> New Best Val Loss ({best_val_loss:.4f}) saved to '{save_path}'")
         else:
             epochs_without_improvement += 1
+
+        if selection_metric == "val_loss":
+            checkpoint_value = avg_val_loss
+            checkpoint_improved = checkpoint_value < (best_checkpoint_value - early_stopping_min_delta)
+            checkpoint_label = "Val Loss"
+        else:
+            checkpoint_value = val_acc
+            checkpoint_improved = checkpoint_value > (best_checkpoint_value + early_stopping_min_delta)
+            checkpoint_label = "Val Acc"
+
+        if checkpoint_improved:
+            best_checkpoint_value = checkpoint_value
+            save_dir = os.path.dirname(save_path)
+            if save_dir:
+                os.makedirs(save_dir, exist_ok=True)
+            torch.save(model.state_dict(), save_path)
+            print(f"--> New Best {checkpoint_label} ({best_checkpoint_value:.4f}) saved to '{save_path}'")
 
         previous_lr = optimizer.param_groups[0]["lr"]
         scheduler.step(avg_val_loss)

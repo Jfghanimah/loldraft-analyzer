@@ -1,9 +1,11 @@
 import argparse
 import json
+import math
 import os
 import shutil
 import time
 import uuid
+from collections import defaultdict
 from concurrent.futures import ProcessPoolExecutor, as_completed
 from pathlib import Path
 
@@ -11,14 +13,35 @@ import pandas as pd
 
 from ml.data.compact_parquet import DEFAULT_COMPRESSION, _require_pyarrow, get_compact_dataset_dir
 from ml.data.match_format import ROLE_ORDER
-from ml.features.recent_history import QUEUE_ID_SOLO, RecentHistoryStore, dense_feature_columns, parse_patch
+from ml.features.recent_history import (
+    GLOBAL_FEATURES,
+    PARTICIPANT_FEATURES,
+    QUEUE_ID_SOLO,
+    RecentHistoryStore,
+    parse_patch,
+)
 from ml.runtime_config import load_runtime_env
 from ml.trainer.feature_pipeline import AUX_TARGET_COLUMNS, CHAMPION_COLUMNS, CHAMPION_LIST_PATH, REGION_LIST_PATH
 
 
-TRAINING_EXAMPLE_SCHEMA_VERSION = 1
+TRAINING_EXAMPLE_SCHEMA_VERSION = 3
 DEFAULT_TRAINING_EXAMPLE_ROWS_PER_FILE = 250_000
 DEFAULT_MAX_WORKERS = 1
+POPULATION_PRIOR_FEATURES = ("champ_role_win_rate", "champ_role_frequency")
+PREPARED_PARTICIPANT_FEATURES = (*PARTICIPANT_FEATURES, *POPULATION_PRIOR_FEATURES)
+CHAMPION_ROLE_PRIOR_SMOOTHING = 20.0
+
+
+def prepared_dense_feature_columns(role_order):
+    columns = []
+    for slot in range(10):
+        prefix = f"slot_{slot}_{'blue' if slot < 5 else 'red'}_{role_order[slot % 5].lower()}"
+        for feature_name in PREPARED_PARTICIPANT_FEATURES:
+            columns.append(f"{prefix}_{feature_name}")
+    columns.extend(GLOBAL_FEATURES)
+    return columns
+
+
 TRAINING_EXAMPLE_METADATA_COLUMNS = (
     "training_example_schema_version",
     "match_id",
@@ -32,7 +55,7 @@ TRAINING_EXAMPLE_MODEL_COLUMNS = (
     *CHAMPION_COLUMNS,
     "region_id",
     *AUX_TARGET_COLUMNS,
-    *dense_feature_columns(ROLE_ORDER),
+    *prepared_dense_feature_columns(ROLE_ORDER),
 )
 TRAINING_EXAMPLE_COLUMNS = (*TRAINING_EXAMPLE_METADATA_COLUMNS, *TRAINING_EXAMPLE_MODEL_COLUMNS)
 
@@ -144,7 +167,79 @@ def _participant_history_row(row):
     }
 
 
-def _build_example(match_row, participant_rows, history_store, champion_list, region_list):
+def _file_matches_queue_id(file_path, queue_id):
+    return queue_id is None or f"queue_id={queue_id}" in Path(file_path).parts
+
+
+def _normalize_champion_role_frequency(games, max_games):
+    if games <= 0 or max_games <= 0:
+        return 0.0
+    return math.log1p(games) / math.log1p(max_games)
+
+
+def _build_champion_role_population_priors(dataset_dir, queue_id, smoothing=CHAMPION_ROLE_PRIOR_SMOOTHING):
+    _, pq = _require_pyarrow()
+    files = [file_path for file_path in _dataset_files(dataset_dir, "participants") if _file_matches_queue_id(file_path, queue_id)]
+    counts = defaultdict(lambda: [0, 0.0])
+    total_games = 0
+    total_wins = 0.0
+    started_at = time.time()
+    if files:
+        print(
+            f"[training-examples] building champion-role population priors files={len(files):,}",
+            flush=True,
+        )
+
+    for file_path in files:
+        dataframe = pq.ParquetFile(file_path).read(columns=["champion_name", "role", "win"]).to_pandas()
+        if dataframe.empty:
+            continue
+        dataframe["win"] = pd.to_numeric(dataframe["win"], errors="coerce").fillna(0.0)
+        total_games += len(dataframe)
+        total_wins += float(dataframe["win"].sum())
+        grouped = dataframe.groupby(["champion_name", "role"], dropna=False)["win"].agg(["count", "sum"])
+        for (champion_name, role), row in grouped.iterrows():
+            if pd.isna(champion_name) or pd.isna(role):
+                continue
+            key = (str(champion_name), str(role))
+            counts[key][0] += int(row["count"])
+            counts[key][1] += float(row["sum"])
+
+    global_rate = (total_wins / total_games) if total_games else 0.5
+    max_games = max((games for games, _ in counts.values()), default=0)
+    rates = {
+        key: (wins + (global_rate * smoothing)) / (games + smoothing)
+        for key, (games, wins) in counts.items()
+    }
+    frequencies = {
+        key: _normalize_champion_role_frequency(games, max_games)
+        for key, (games, _) in counts.items()
+    }
+    print(
+        f"[training-examples] champion-role priors ready combos={len(rates):,} "
+        f"participants={total_games:,} global_win_rate={global_rate:.4f} "
+        f"max_pair_games={max_games:,} "
+        f"elapsed={time.time() - started_at:.1f}s",
+        flush=True,
+    )
+    return {"rates": rates, "frequencies": frequencies, "global_rate": global_rate}
+
+
+def _champion_role_win_rate(champion_role_priors, champion_name, role):
+    if not champion_role_priors:
+        return 0.5
+    rates = champion_role_priors.get("rates", {})
+    return float(rates.get((champion_name, role), champion_role_priors.get("global_rate", 0.5)))
+
+
+def _champion_role_frequency(champion_role_priors, champion_name, role):
+    if not champion_role_priors:
+        return 0.0
+    frequencies = champion_role_priors.get("frequencies", {})
+    return float(frequencies.get((champion_name, role), 0.0))
+
+
+def _build_example(match_row, participant_rows, history_store, champion_list, region_list, champion_role_priors=None):
     game_creation = int(match_row["game_creation"] or 0)
     game_version = match_row.get("game_version") or ""
     feature_values = []
@@ -155,6 +250,20 @@ def _build_example(match_row, participant_rows, history_store, champion_list, re
                 participant["champion_name"],
                 participant["role"],
                 game_creation,
+            )
+        )
+        feature_values.append(
+            _champion_role_win_rate(
+                champion_role_priors,
+                participant["champion_name"],
+                participant["role"],
+            )
+        )
+        feature_values.append(
+            _champion_role_frequency(
+                champion_role_priors,
+                participant["champion_name"],
+                participant["role"],
             )
         )
     feature_values.extend(parse_patch(game_version))
@@ -182,7 +291,7 @@ def _build_example(match_row, participant_rows, history_store, champion_list, re
     }
     for column, champion_id in zip(CHAMPION_COLUMNS, champion_ids):
         values[column] = champion_id
-    for column, value in zip(dense_feature_columns(ROLE_ORDER), feature_values):
+    for column, value in zip(prepared_dense_feature_columns(ROLE_ORDER), feature_values):
         values[column] = float(value)
     return {column: values.get(column) for column in TRAINING_EXAMPLE_COLUMNS}
 
@@ -261,7 +370,17 @@ def _sync_mappings_from_compact_matches(dataset_dir, queue_id, champion_path, re
     return champion_list, region_list
 
 
-def _prepare_platform_training_examples(dataset_dir, output_dir, queue_id, platform, dates, champion_list, region_list, rows_per_file):
+def _prepare_platform_training_examples(
+    dataset_dir,
+    output_dir,
+    queue_id,
+    platform,
+    dates,
+    champion_list,
+    region_list,
+    champion_role_priors,
+    rows_per_file,
+):
     history_store = RecentHistoryStore()
     total_examples = 0
     written_manifest_rows = []
@@ -280,7 +399,16 @@ def _prepare_platform_training_examples(dataset_dir, output_dir, queue_id, platf
             participant_rows = participants_by_match.get(match_row["match_id"], [])
             if len(participant_rows) != 10:
                 continue
-            examples.append(_build_example(match_row, participant_rows, history_store, champion_list, region_list))
+            examples.append(
+                _build_example(
+                    match_row,
+                    participant_rows,
+                    history_store,
+                    champion_list,
+                    region_list,
+                    champion_role_priors,
+                )
+            )
             history_store.add_match_rows(participant_rows)
         written = _write_training_examples(output_dir, examples, rows_per_file=rows_per_file)
         written_manifest_rows.extend(written)
@@ -321,6 +449,7 @@ def prepare_training_examples(
             manifest_path.unlink()
 
     champion_list, region_list = _sync_mappings_from_compact_matches(dataset_dir, queue_id, champion_path, region_path)
+    champion_role_priors = _build_champion_role_population_priors(dataset_dir, queue_id)
     total_examples = 0
     started_at = time.time()
     written_manifest_rows = []
@@ -348,6 +477,7 @@ def prepare_training_examples(
                     dates,
                     champion_list,
                     region_list,
+                    champion_role_priors,
                     rows_per_file,
                 )
                 for platform, dates in jobs
@@ -371,6 +501,7 @@ def prepare_training_examples(
                 dates,
                 champion_list,
                 region_list,
+                champion_role_priors,
                 rows_per_file,
             )
             written_manifest_rows.extend(result["manifest_rows"])

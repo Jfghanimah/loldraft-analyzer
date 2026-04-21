@@ -2,6 +2,7 @@ import json
 import sqlite3
 
 import pytest
+from requests.exceptions import ConnectionError
 
 import ml.data.data_api_sqlite as data_api_sqlite
 from ml.data.compact_parquet import CompactParquetWriter
@@ -250,6 +251,98 @@ def test_process_region_requeues_match_after_429(monkeypatch):
 
     assert did_work is False
     assert queued == [("NA1_9",)]
+
+
+def test_process_region_stops_and_requeues_match_after_auth_error(monkeypatch):
+    conn = make_conn()
+    conn.execute("INSERT INTO match_queue_na1 VALUES (?)", ("NA1_9",))
+
+    match_api = FakeMatchApi(by_id_error=DummyApiError(401))
+    monkeypatch.setattr(data_api_sqlite, "lol_watcher", FakeLolWatcher(match_api))
+    monkeypatch.setattr(data_api_sqlite, "riot_watcher", FakeRiotWatcher(FakeAccountApi()))
+    monkeypatch.setattr(data_api_sqlite, "ApiError", DummyApiError)
+    monkeypatch.setattr(data_api_sqlite, "keep_running", True)
+
+    did_work = data_api_sqlite.process_region(
+        conn,
+        {"platform": "na1", "region": "americas"},
+    )
+
+    queued = conn.execute("SELECT match_id FROM match_queue_na1").fetchall()
+    conn.close()
+
+    assert did_work is False
+    assert data_api_sqlite.keep_running is False
+    assert queued == [("NA1_9",)]
+
+
+def test_process_region_requeues_match_after_transient_network_error(monkeypatch):
+    conn = make_conn()
+    conn.execute("INSERT INTO match_queue_na1 VALUES (?)", ("NA1_9",))
+
+    match_api = FakeMatchApi(by_id_error=ConnectionError("remote closed"))
+    monkeypatch.setattr(data_api_sqlite, "lol_watcher", FakeLolWatcher(match_api))
+    monkeypatch.setattr(data_api_sqlite, "riot_watcher", FakeRiotWatcher(FakeAccountApi()))
+    monkeypatch.setattr(data_api_sqlite.time, "sleep", lambda _seconds: None)
+
+    did_work = data_api_sqlite.process_region(
+        conn,
+        {"platform": "na1", "region": "americas"},
+    )
+
+    queued = conn.execute("SELECT match_id FROM match_queue_na1").fetchall()
+    conn.close()
+
+    assert did_work is False
+    assert queued == [("NA1_9",)]
+
+
+def test_process_region_requeues_player_after_transient_network_error(monkeypatch):
+    conn = make_conn()
+    conn.execute("INSERT INTO puuid_queue_na1 VALUES (?)", ("seed-puuid",))
+
+    match_api = FakeMatchApi(history_error=ConnectionError("remote closed"))
+    monkeypatch.setattr(data_api_sqlite, "lol_watcher", FakeLolWatcher(match_api))
+    monkeypatch.setattr(data_api_sqlite, "riot_watcher", FakeRiotWatcher(FakeAccountApi()))
+    monkeypatch.setattr(data_api_sqlite.time, "sleep", lambda _seconds: None)
+
+    did_work = data_api_sqlite.process_region(
+        conn,
+        {"platform": "na1", "region": "americas"},
+    )
+
+    queued = conn.execute("SELECT puuid FROM puuid_queue_na1").fetchall()
+    processed = conn.execute("SELECT puuid FROM processed_puuids_na1").fetchall()
+    conn.close()
+
+    assert did_work is False
+    assert queued == [("seed-puuid",)]
+    assert processed == []
+
+
+def test_process_region_stops_and_unmarks_player_after_auth_error(monkeypatch):
+    conn = make_conn()
+    conn.execute("INSERT INTO puuid_queue_na1 VALUES (?)", ("seed-puuid",))
+
+    match_api = FakeMatchApi(history_error=DummyApiError(401))
+    monkeypatch.setattr(data_api_sqlite, "lol_watcher", FakeLolWatcher(match_api))
+    monkeypatch.setattr(data_api_sqlite, "riot_watcher", FakeRiotWatcher(FakeAccountApi()))
+    monkeypatch.setattr(data_api_sqlite, "ApiError", DummyApiError)
+    monkeypatch.setattr(data_api_sqlite, "keep_running", True)
+
+    did_work = data_api_sqlite.process_region(
+        conn,
+        {"platform": "na1", "region": "americas"},
+    )
+
+    queued = conn.execute("SELECT puuid FROM puuid_queue_na1").fetchall()
+    processed = conn.execute("SELECT puuid FROM processed_puuids_na1").fetchall()
+    conn.close()
+
+    assert did_work is False
+    assert data_api_sqlite.keep_running is False
+    assert queued == [("seed-puuid",)]
+    assert processed == []
 
 
 def test_process_region_only_fetches_match_data_when_rank_helpers_exist(monkeypatch):

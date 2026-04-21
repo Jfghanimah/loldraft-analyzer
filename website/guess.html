@@ -1,0 +1,252 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Guess the Winner — LoL Draft Analyzer</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+
+  <header>
+    <h1>Draft Analyzer</h1>
+    <p class="subtitle">Can you out-predict the model?</p>
+    <nav class="site-nav">
+      <a href="/" class="nav-link">Analyzer</a>
+      <a href="/guess.html" class="nav-link active">Guess the Winner</a>
+    </nav>
+  </header>
+
+  <main class="guess-main">
+
+    <!-- Score bar -->
+    <div class="card guess-scorebar">
+      <span class="score-label">Session Score</span>
+      <span class="score-fraction">
+        <span id="score-correct">0</span> / <span id="score-total">0</span>
+      </span>
+      <span id="score-pct" class="score-pct">—</span>
+    </div>
+
+    <!-- Game card -->
+    <section class="card guess-card">
+
+      <!-- Draft + guess buttons -->
+      <div id="guess-draft" hidden>
+        <div id="guess-bans" class="guess-bans" hidden></div>
+        <div id="guess-teams" class="guess-teams"></div>
+        <div class="guess-actions">
+          <button id="btn-blue-wins" class="btn-guess btn-guess-blue">Blue Wins</button>
+          <button id="btn-red-wins"  class="btn-guess btn-guess-red">Red Wins</button>
+        </div>
+      </div>
+
+      <!-- Result reveal -->
+      <div id="guess-result" hidden>
+        <div id="result-banner" class="result-banner"></div>
+        <div id="result-teams" class="guess-teams"></div>
+        <button id="btn-next" class="btn-primary btn-next">Next Game →</button>
+      </div>
+
+    </section>
+  </main>
+
+<script>
+const ROLES = ['Top', 'Jgl', 'Mid', 'Bot', 'Sup'];
+
+const DDRAGON_SPECIAL = {
+  'Aurelion Sol':   'AurelionSol',
+  "Bel'Veth":       'Belveth',
+  "Cho'Gath":       'Chogath',
+  'Dr. Mundo':      'DrMundo',
+  'Jarvan IV':      'JarvanIV',
+  "Kai'Sa":         'Kaisa',
+  "Kha'Zix":        'Khazix',
+  "Kog'Maw":        'KogMaw',
+  'LeBlanc':        'Leblanc',
+  'Lee Sin':        'LeeSin',
+  'Master Yi':      'MasterYi',
+  'Miss Fortune':   'MissFortune',
+  'Nunu & Willump': 'Nunu',
+  "Rek'Sai":        'RekSai',
+  'Renata Glasc':   'Renata',
+  'Tahm Kench':     'TahmKench',
+  'Twisted Fate':   'TwistedFate',
+  "Vel'Koz":        'Velkoz',
+  'Wukong':         'MonkeyKing',
+  'Xin Zhao':       'XinZhao',
+};
+
+let ddragonVersion = '15.7.1';
+let session = { correct: 0, total: 0 };
+let currentGame = null;
+
+// ── Helpers ─────────────────────────────────────────────────────────────────
+
+const $ = id => document.getElementById(id);
+
+function show(id) { $(id).hidden = false; }
+function hide(id) { $(id).hidden = true; }
+
+function champIconUrl(name) {
+  const key = DDRAGON_SPECIAL[name] ?? name.replace(/[' .]/g, '');
+  return `https://ddragon.leagueoflegends.com/cdn/${ddragonVersion}/img/champion/${key}.png`;
+}
+
+// ── DDragon version ──────────────────────────────────────────────────────────
+
+async function fetchDDragonVersion() {
+  try {
+    const r    = await fetch('https://ddragon.leagueoflegends.com/api/versions.json');
+    const list = await r.json();
+    if (list?.[0]) ddragonVersion = list[0];
+  } catch {}
+}
+
+// ── Render helpers ───────────────────────────────────────────────────────────
+
+function banSlotHtml(name) {
+  if (!name) {
+    return `<div class="ban-slot" style="pointer-events:none"></div>`;
+  }
+  return `<div class="ban-slot filled" title="${name}">
+    <img src="${champIconUrl(name)}" alt="${name}" loading="lazy" />
+  </div>`;
+}
+
+function teamCardHtml(champs, side, revealed, isWinner) {
+  const classes = ['guess-team-card', side];
+  if (revealed) classes.push(isWinner ? 'winner' : 'loser');
+
+  const rows = champs.map((name, i) => `
+    <div class="guess-champ-row">
+      <img class="guess-champ-icon" src="${champIconUrl(name)}" alt="${name}" loading="lazy">
+      <span class="guess-champ-role">${ROLES[i]}</span>
+      <span class="guess-champ-name">${name}</span>
+    </div>`).join('');
+
+  const label = side === 'blue' ? 'Blue Side' : 'Red Side';
+  return `<div class="${classes.join(' ')}">
+    <div class="guess-team-header">${label}</div>
+    ${rows}
+  </div>`;
+}
+
+// ── Game loading ─────────────────────────────────────────────────────────────
+
+async function loadGame() {
+  hide('guess-draft');
+  hide('guess-result');
+
+  try {
+    const r = await fetch('/api/demo-game');
+    if (!r.ok) throw new Error(`HTTP ${r.status}`);
+    const game = await r.json();
+
+    if (game.blue_win === null || game.blue_win === undefined) {
+      return loadGame();
+    }
+
+    currentGame = game;
+    renderDraft(game);
+  } catch (err) {
+    // Show error inside draft panel so the page doesn't go blank
+    $('guess-teams').innerHTML =
+      `<p style="color:var(--text-secondary);grid-column:1/-1;text-align:center;padding:2rem">
+         Failed to load: ${err.message}</p>`;
+    show('guess-draft');
+  }
+}
+
+function renderDraft(game) {
+  // Bans (only show if data is present)
+  const blueBans = (game.blue_bans || []).filter(Boolean);
+  const redBans  = (game.red_bans  || []).filter(Boolean);
+  const bansEl   = $('guess-bans');
+  if (blueBans.length || redBans.length) {
+    bansEl.innerHTML = `
+      <div class="guess-ban-group">${blueBans.slice(0,5).map(banSlotHtml).join('')}</div>
+      <span class="guess-bans-label">Bans</span>
+      <div class="guess-ban-group right">${redBans.slice(0,5).map(banSlotHtml).join('')}</div>`;
+    bansEl.hidden = false;
+  } else {
+    bansEl.hidden = true;
+  }
+
+  // Teams
+  $('guess-teams').innerHTML =
+    teamCardHtml(game.blue_team, 'blue', false, false) +
+    teamCardHtml(game.red_team,  'red',  false, false);
+
+  $('btn-blue-wins').disabled = false;
+  $('btn-red-wins').disabled  = false;
+  show('guess-draft');
+}
+
+// ── Guessing ─────────────────────────────────────────────────────────────────
+
+function makeGuess(guessedBlue) {
+  if (!currentGame) return;
+  $('btn-blue-wins').disabled = true;
+  $('btn-red-wins').disabled  = true;
+
+  const blueWon = Boolean(currentGame.blue_win);
+  const correct = guessedBlue === blueWon;
+
+  session.total++;
+  if (correct) session.correct++;
+  updateScore();
+
+  showResult(correct, blueWon);
+}
+
+function showResult(correct, blueWon) {
+  const banner = $('result-banner');
+  const winner = blueWon ? 'Blue' : 'Red';
+
+  if (correct) {
+    banner.className = 'result-banner result-correct';
+    banner.innerHTML = `✓ Correct!<small>${winner} side won this match</small>`;
+  } else {
+    banner.className = 'result-banner result-wrong';
+    banner.innerHTML = `✗ Wrong!<small>${winner} side actually won</small>`;
+  }
+
+  $('result-teams').innerHTML =
+    teamCardHtml(currentGame.blue_team, 'blue', true,  blueWon) +
+    teamCardHtml(currentGame.red_team,  'red',  true, !blueWon);
+
+  hide('guess-draft');
+  show('guess-result');
+}
+
+// ── Score display ─────────────────────────────────────────────────────────────
+
+function updateScore() {
+  $('score-correct').textContent = session.correct;
+  $('score-total').textContent   = session.total;
+
+  const pctEl = $('score-pct');
+  if (session.total === 0) {
+    pctEl.textContent = '—';
+    pctEl.className   = 'score-pct';
+    return;
+  }
+  const pct = Math.round(session.correct / session.total * 100);
+  pctEl.textContent = `${pct}%`;
+  pctEl.className   = `score-pct ${pct >= 50 ? 'good' : 'bad'}`;
+}
+
+// ── Event listeners ───────────────────────────────────────────────────────────
+
+$('btn-blue-wins').addEventListener('click', () => makeGuess(true));
+$('btn-red-wins').addEventListener('click',  () => makeGuess(false));
+$('btn-next').addEventListener('click', loadGame);
+
+// ── Boot ──────────────────────────────────────────────────────────────────────
+
+fetchDDragonVersion().then(loadGame);
+</script>
+
+</body>
+</html>

@@ -4,7 +4,11 @@ import pytest
 
 from ml.data.compact_parquet import CompactParquetWriter
 from ml.data.compact_records import extract_compact_records
-from ml.data.prepare_training_examples import load_training_examples_dataframe, prepare_training_examples
+from ml.data.prepare_training_examples import (
+    load_training_examples_dataframe,
+    prepare_training_examples,
+    prepared_dense_feature_columns,
+)
 from ml.features.recent_history import dense_feature_columns
 from ml.data.match_format import ROLE_ORDER
 
@@ -87,15 +91,25 @@ def test_prepare_training_examples_builds_prior_history_features(tmp_path):
     )
     records = _read_training_examples(dataset_dir)
     games_played_col = dense_feature_columns(ROLE_ORDER)[0]
+    champ_role_win_rate_col = "slot_0_blue_top_champ_role_win_rate"
+    champ_role_frequency_col = "slot_0_blue_top_champ_role_frequency"
 
     assert result["examples"] == 2
     assert len(records) == 2
     assert records[0][games_played_col] == 0.0
     assert records[1][games_played_col] > 0.0
+    assert champ_role_win_rate_col in prepared_dense_feature_columns(ROLE_ORDER)
+    assert champ_role_frequency_col in prepared_dense_feature_columns(ROLE_ORDER)
+    assert records[0][champ_role_win_rate_col] > 0.5
+    assert records[0][champ_role_win_rate_col] == records[1][champ_role_win_rate_col]
+    assert 0.0 < records[0][champ_role_frequency_col] <= 1.0
+    assert records[0][champ_role_frequency_col] == records[1][champ_role_frequency_col]
     assert records[0]["champion_0"] == records[1]["champion_0"]
     assert json.loads(champion_path.read_text(encoding="utf-8"))["Aatrox"] == records[0]["champion_0"]
 
     dataframe, champion_list = load_training_examples_dataframe(dataset_dir, champion_path=champion_path)
     assert "match_id" not in dataframe.columns
+    assert champ_role_win_rate_col in dataframe.columns
+    assert champ_role_frequency_col in dataframe.columns
     assert len(dataframe) == 2
     assert champion_list["Aatrox"] == records[0]["champion_0"]

@@ -10,7 +10,7 @@ import argparse
 import os
 import sys
 
-from ml.trainer.train_unified_model import run_unified_training
+from ml.trainer.train_unified_model import AUX_TARGET_WEIGHTS, run_unified_training
 
 DIVIDER = "=" * 50
 DEFAULT_TRAIN_LOG_PATH = "ml/save_data/latest_train_log.txt"
@@ -41,6 +41,12 @@ def main():
     parser.add_argument("--model-heads", type=int, default=4, help="Attention heads (default: 4)")
     parser.add_argument("--model-layers", type=int, default=2, help="Transformer layers (default: 2)")
     parser.add_argument("--model-ff", type=int, default=256, help="Feedforward width (default: 256)")
+    parser.add_argument(
+        "--architecture",
+        choices=("flat", "team_compare", "pairwise", "cls_global"),
+        default="flat",
+        help="Prediction head architecture (default: flat)",
+    )
     parser.add_argument("--dropout", type=float, default=0.45, help="Model dropout (default: 0.45)")
     parser.add_argument("--finetune-patience", type=int, default=20, help="Early stopping patience (default: 20)")
     parser.add_argument("--finetune-min-delta", type=float, default=1e-4, help="Minimum val-loss improvement (default: 1e-4)")
@@ -51,10 +57,40 @@ def main():
     parser.add_argument("--refresh-feature-cache", action="store_true", help="Rebuild the cached feature dataframe before training")
     parser.add_argument("--feature-cache-path", default="ml/save_data/unified_feature_cache.pkl", help="Path to the cached feature dataframe bundle")
     parser.add_argument("--training-data-dir", default=None, help="Prepared compact Parquet dataset root containing training_examples")
+    parser.add_argument("--save-path", default="ml/save_data/best_unified_win_predictor.pth", help="Path for the best checkpoint")
+    parser.add_argument("--train-log-path", default=DEFAULT_TRAIN_LOG_PATH, help="Path for the training log")
+    parser.add_argument(
+        "--selection-metric",
+        choices=("val_loss", "val_acc"),
+        default="val_loss",
+        help="Metric used to select the saved checkpoint (default: val_loss)",
+    )
+    parser.add_argument(
+        "--aux-target-weights",
+        type=float,
+        nargs=4,
+        metavar=("GOLD", "BLUE_DRAGONS", "RED_DRAGONS", "GAME_LENGTH"),
+        default=None,
+        help="Auxiliary loss weights for gold, blue dragons, red dragons, and game length",
+    )
+    parser.add_argument("--seed", type=int, default=42, help="Torch RNG seed for model init and train shuffling")
+    parser.add_argument(
+        "--label-smoothing",
+        type=float,
+        default=0.0,
+        help="Binary label smoothing floor; 0.15 maps targets to 0.15/0.85",
+    )
+    parser.add_argument(
+        "--drop-population-priors",
+        action="store_true",
+        help="Drop champ-role population win-rate/frequency priors from dense inputs",
+    )
     args = parser.parse_args()
 
-    os.makedirs(os.path.dirname(DEFAULT_TRAIN_LOG_PATH), exist_ok=True)
-    with open(DEFAULT_TRAIN_LOG_PATH, "w", encoding="utf-8") as log_file:
+    train_log_dir = os.path.dirname(args.train_log_path)
+    if train_log_dir:
+        os.makedirs(train_log_dir, exist_ok=True)
+    with open(args.train_log_path, "w", encoding="utf-8") as log_file:
         tee = _TeeStream(sys.stdout, log_file)
         original_stdout = sys.stdout
         original_stderr = sys.stderr
@@ -64,7 +100,7 @@ def main():
             print(DIVIDER)
             print("Training Unified Win Predictor")
             print(DIVIDER)
-            print(f"[Unified] Writing training log to {DEFAULT_TRAIN_LOG_PATH}")
+            print(f"[Unified] Writing training log to {args.train_log_path}")
             run_unified_training(
                 epochs=args.finetune_epochs,
                 batch_size=args.batch_size,
@@ -74,6 +110,7 @@ def main():
                 nhead=args.model_heads,
                 num_layers=args.model_layers,
                 dim_feedforward=args.model_ff,
+                architecture=args.architecture,
                 dropout=args.dropout,
                 early_stopping_patience=args.finetune_patience,
                 early_stopping_min_delta=args.finetune_min_delta,
@@ -83,6 +120,12 @@ def main():
                 scheduler_min_lr=args.finetune_min_lr,
                 training_data_dir=args.training_data_dir,
                 feature_cache_path=args.feature_cache_path,
+                save_path=args.save_path,
+                selection_metric=args.selection_metric,
+                aux_target_weights=args.aux_target_weights if args.aux_target_weights is not None else AUX_TARGET_WEIGHTS,
+                seed=args.seed,
+                label_smoothing=args.label_smoothing,
+                drop_population_priors=args.drop_population_priors,
                 refresh_feature_cache=args.refresh_feature_cache,
             )
             print("\nDone.")

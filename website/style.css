@@ -19,6 +19,7 @@
 
 /* ── Reset ──────────────────────────────────────────────────────────────── */
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+[hidden] { display: none !important; }
 
 body {
   font-family: 'Segoe UI', system-ui, sans-serif;
@@ -764,4 +765,254 @@ main {
   color: var(--text-dim);
   font-size: 0.85rem;
   padding: 2rem 0;
+}
+
+/* ── Site navigation ─────────────────────────────────────────────────────── */
+.site-nav {
+  display: flex;
+  justify-content: center;
+  gap: 2rem;
+  margin-top: 0.9rem;
+}
+.nav-link {
+  font-size: 0.78rem;
+  font-weight: 600;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--text-secondary);
+  text-decoration: none;
+  padding: 0.2em 0;
+  border-bottom: 2px solid transparent;
+  transition: color var(--transition), border-color var(--transition);
+}
+.nav-link:hover  { color: var(--text-primary); }
+.nav-link.active { color: var(--gold); border-bottom-color: var(--gold); }
+
+/* ── Guess-the-winner page ───────────────────────────────────────────────── */
+.guess-main {
+  max-width: 860px;
+  margin: 2rem auto;
+  padding: 0 1.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+}
+
+/* Score bar */
+.guess-scorebar {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  padding: 0.85rem 1.4rem;
+}
+.score-label {
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: var(--text-dim);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+.score-fraction {
+  font-size: 1.15rem;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+.score-pct {
+  font-size: 1.15rem;
+  font-weight: 700;
+  color: var(--text-dim);
+  margin-left: auto;
+  transition: color 0.4s ease;
+}
+.score-pct.good { color: #34d399; }
+.score-pct.bad  { color: #f87171; }
+
+/* Card shell */
+.guess-card { min-height: 340px; }
+
+.guess-loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 5rem 0;
+  color: var(--text-dim);
+  font-size: 0.9rem;
+  gap: 0.5rem;
+}
+@keyframes guessSpinner {
+  to { transform: rotate(360deg); }
+}
+.guess-spinner {
+  width: 16px; height: 16px;
+  border: 2px solid var(--border);
+  border-top-color: var(--gold);
+  border-radius: 50%;
+  animation: guessSpinner 0.7s linear infinite;
+  flex-shrink: 0;
+}
+
+/* Bans row */
+.guess-bans {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  margin-bottom: 1.25rem;
+  padding-bottom: 1.25rem;
+  border-bottom: 1px solid var(--border);
+}
+.guess-ban-group { display: flex; gap: 0.35rem; flex: 1; }
+.guess-ban-group.right { justify-content: flex-end; }
+.guess-bans-label {
+  font-size: 0.6rem;
+  font-weight: 700;
+  color: var(--text-dim);
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  white-space: nowrap;
+}
+
+/* Teams */
+.guess-teams {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1rem;
+  margin-bottom: 1.5rem;
+}
+@media (max-width: 560px) {
+  .guess-teams { grid-template-columns: 1fr; }
+}
+
+.guess-team-card {
+  background: var(--bg-slot);
+  border: 2px solid var(--border);
+  border-radius: var(--radius);
+  overflow: hidden;
+  transition: border-color 0.35s ease, box-shadow 0.35s ease, opacity 0.35s ease;
+}
+.guess-team-card.winner {
+  border-color: var(--gold);
+  box-shadow: 0 0 20px rgba(200,155,60,0.22);
+}
+.guess-team-card.loser { opacity: 0.38; }
+
+.guess-team-header {
+  padding: 0.45rem 0.75rem;
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  text-align: center;
+  border-bottom: 2px solid;
+}
+.guess-team-card.blue .guess-team-header {
+  color: #60a5fa;
+  border-color: var(--blue-team);
+  background: rgba(30,95,163,0.18);
+}
+.guess-team-card.red .guess-team-header {
+  color: #f87171;
+  border-color: var(--red-team);
+  background: rgba(155,28,28,0.18);
+}
+
+.guess-champ-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.3rem 0.65rem;
+  border-bottom: 1px solid rgba(255,255,255,0.03);
+}
+.guess-champ-row:last-child { border-bottom: none; }
+.guess-champ-icon {
+  width: 48px;
+  height: 48px;
+  border-radius: 4px;
+  object-fit: cover;
+  flex-shrink: 0;
+}
+.guess-champ-role {
+  font-size: 0.56rem;
+  font-weight: 700;
+  color: var(--text-dim);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  width: 22px;
+  flex-shrink: 0;
+}
+.guess-champ-name {
+  font-size: 0.82rem;
+  color: var(--text-primary);
+  flex: 1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Guess buttons */
+.guess-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1rem;
+}
+.btn-guess {
+  padding: 0.85rem;
+  font-size: 0.95rem;
+  font-weight: 700;
+  border: 2px solid;
+  border-radius: var(--radius);
+  cursor: pointer;
+  letter-spacing: 0.04em;
+  transition: background var(--transition), transform var(--transition), box-shadow var(--transition);
+  background: transparent;
+}
+.btn-guess:hover    { transform: translateY(-2px); }
+.btn-guess:active   { transform: translateY(0); }
+.btn-guess:disabled { opacity: 0.35; cursor: not-allowed; transform: none; }
+.btn-guess-blue {
+  color: #60a5fa;
+  border-color: var(--blue-team);
+  background: rgba(30,95,163,0.1);
+}
+.btn-guess-blue:hover {
+  background: rgba(30,95,163,0.28);
+  box-shadow: 0 4px 18px rgba(30,95,163,0.28);
+}
+.btn-guess-red {
+  color: #f87171;
+  border-color: var(--red-team);
+  background: rgba(155,28,28,0.1);
+}
+.btn-guess-red:hover {
+  background: rgba(155,28,28,0.28);
+  box-shadow: 0 4px 18px rgba(155,28,28,0.28);
+}
+
+/* Result reveal */
+.result-banner {
+  text-align: center;
+  font-size: 1.4rem;
+  font-weight: 700;
+  padding: 0.9rem;
+  margin-bottom: 1.25rem;
+  border-radius: var(--radius);
+  animation: fadeSlideIn 0.3s ease;
+}
+.result-banner small {
+  display: block;
+  font-size: 0.78rem;
+  font-weight: 400;
+  margin-top: 0.25rem;
+  opacity: 0.85;
+}
+.result-correct { color: #34d399; background: rgba(52,211,153,0.08); border: 1px solid rgba(52,211,153,0.2); }
+.result-wrong   { color: #f87171; background: rgba(248,113,113,0.08); border: 1px solid rgba(248,113,113,0.2); }
+
+.btn-next {
+  display: block;
+  width: 100%;
+  text-align: center;
+  padding: 0.75rem;
+  font-size: 0.95rem;
+  margin-top: 0.25rem;
 }

@@ -10,8 +10,14 @@ post-game stats are allowed only as labels / auxiliary targets, never as inputs
 3. Redesign unified dense features before major model experimentation:
 done: replaced raw totals with pace-adjusted prior-game stats and prior average game length
 done: added region as context
-next: add global champ-role priors from the training population (smoothed champ-role winrate plus pickrate/support) so obviously bad off-role picks are not drowned out by otherwise normal drafts
-note: this likely needs a level-1 / level-2 cache refactor because we do not currently extract and preserve the right population-level champ-role statistics cleanly
+done: added smoothed global champion-role winrate priors to prepared training_examples schema v2 so obviously bad off-role picks are not drowned out by otherwise normal drafts
+done: added log-normalized champion-role frequency beside winrate in prepared training_examples schema v3
+done: schema v3 flat training reached 57.72% validation accuracy with best validation loss 0.7027
+done: A/B tested removing champ-role population priors; it regressed to 57.46%, so keep priors in the active baseline
+done: added `--drop-population-priors` for future ablations
+done: documented the long-term compositional-generalization principle: make champion-role/team meaning emerge from embeddings and attention, not hand-authored champion labels
+next: prototype masked draft pretraining so the encoder learns champion fit and composition structure before win/loss fine-tuning
+next: after masked draft pretraining or much more data, re-run the no-prior ablation to see whether population priors are still necessary
 next: add stronger team-level and lane-level delta features instead of only slot-local aggregates
 next: revisit sparse-history defaults so neutral fallback values do not wash out signal
 add train-split-only normalization stats instead of relying only on bounded scaling
@@ -19,7 +25,10 @@ add train-split-only normalization stats instead of relying only on bounded scal
 4. Support multitask learning early if it is cheap to wire into the cached dataset:
 done: keep win/loss as the primary target
 done: added auxiliary targets for gold_diff, blue_dragons, red_dragons, and game_length_minutes
-next: verify they improve validation behavior and tune loss weights if needed
+done: verified gold_diff and dragon auxiliary heads beat mean baseline slightly
+done: verified game_length_minutes is currently worse than mean baseline
+done: A/B tested zero game_length aux weight; it reached 57.75% and did not beat the active model
+done: added configurable `--aux-target-weights`
 
 5. Run ablations on the same exact dataset and split:
 champ-only baseline
@@ -31,6 +40,11 @@ multitask vs win-only
 6. Keep the unified model path clean and understandable while tuning:
 done: removed legacy blue_side usage and manual blue/red summary pooling from the active path
 done: keep per-player history attached to each slot token before self-attention
+done: added `--architecture team_compare`, which reached 57.85% validation accuracy and 0.7025 best validation loss on compact schema v3
+done: added `--selection-metric val_acc` so accuracy-focused A/B runs preserve the highest-accuracy checkpoint
+done: A/B tested `--architecture pairwise`; it tied/slightly trailed the active model while costing over 2x per epoch, so do not promote it
+done: added `--seed` so future training comparisons are less noisy
+done: promoted `--architecture cls_global` with 4 layers, CLS readout, separate global token, dropout 0.15, weight decay 0.05, and label smoothing 0.15; evaluator accuracy 57.83%
 next: tune transformer depth/width and post-transformer head size
 next: compare the enriched-token transformer against a simpler enriched-token MLP baseline
 
@@ -40,8 +54,9 @@ done: add compact match / participant record extraction and Parquet shard writer
 done: add model-ready `training_examples` preparation and unified trainer `--training-data-dir`
 done: make the live scraper compact-first by default via `config/scraper.json`
 done: add platform-level parallelism for `training_examples` preparation
-next: migrate the current SQLite DB into `ml/save_data/lol_dataset_v1/`
-next: compare prepared-Parquet training against the current SQLite-built feature path
+done: migrated the current SQLite DB into `ml/save_data/lol_dataset_v1/` and validated row counts against old SQLite
+done: live scraper is compact-first by default; command is `python -m ml.data.data_api_sqlite`
+next: compare prepared-Parquet training metrics against the current SQLite-built feature path
 
 8. Done: removed old pretrain/sequence branches and old non-unified trainer paths.
 

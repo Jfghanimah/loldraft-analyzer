@@ -14,6 +14,7 @@ import json
 import math
 import os
 import random
+import re
 import sqlite3
 import sys
 from pathlib import Path
@@ -40,7 +41,12 @@ app.add_middleware(
 )
 
 CHAMP_LIST_PATH = Path("ml/save_data/champion_list.json")
-MODEL_PATH      = Path("ml/save_data/best_win_predictor.pth")
+MODEL_PATH      = Path("ml/save_data/best_unified_win_predictor_cls_global_l4_acc.pth")
+LOG_PATH        = Path("ml/save_data/latest_train_log_cls_global_l4_acc.txt")
+
+# Population prior defaults: (champ_role_win_rate, champ_role_frequency)
+# Used to zero-fill slots when population priors are absent at inference time.
+_PRIOR_DEFAULTS = (0.5, 0.0)
 
 # ---------------------------------------------------------------------------
 # Lazy model + champion list loading
@@ -51,31 +57,65 @@ _champion_list = None
 _model_loaded  = False
 
 # ---------------------------------------------------------------------------
-# DDragon champion ID → name map (used for ban resolution in demo endpoint)
+# Parquet match file cache (for fast demo-game random selection)
 # ---------------------------------------------------------------------------
 
-_ddragon_id_to_name: dict[int, str] = {}
+_parquet_match_files: list = []
+_parquet_files_loaded = False
 
-def _get_ddragon_id_map() -> dict[int, str]:
-    """Fetch Riot champion-ID → display-name from DDragon (lazy, cached)."""
-    global _ddragon_id_to_name
-    if _ddragon_id_to_name:
-        return _ddragon_id_to_name
-    try:
-        import urllib.request
-        with urllib.request.urlopen(
-            "https://ddragon.leagueoflegends.com/api/versions.json", timeout=5
-        ) as r:
-            version = json.loads(r.read())[0]
-        url = f"https://ddragon.leagueoflegends.com/cdn/{version}/data/en_US/champion.json"
-        with urllib.request.urlopen(url, timeout=10) as r:
-            data = json.loads(r.read())
-        for entry in data["data"].values():
-            _ddragon_id_to_name[int(entry["key"])] = entry["name"]
-        print(f"[server] DDragon ID map loaded: {len(_ddragon_id_to_name)} champions (patch {version})")
-    except Exception as exc:
-        print(f"[server] Could not fetch DDragon champion map: {exc}")
-    return _ddragon_id_to_name
+_PARQUET_COLS = ["match_id", "blue_win"] + [f"champion_{i}" for i in range(10)]
+
+def _load_parquet_files():
+    global _parquet_match_files, _parquet_files_loaded
+    if _parquet_files_loaded:
+        return
+    from ml.runtime_config import get_compact_dataset_dir
+    matches_dir = Path(get_compact_dataset_dir()) / "matches"
+    if matches_dir.exists():
+        _parquet_match_files = list(matches_dir.glob("**/*.parquet"))
+    print(f"[server] Parquet match files indexed: {len(_parquet_match_files):,}")
+    _parquet_files_loaded = True
+
+
+def _parse_model_config_from_log(log_path):
+    """Parse model hyperparameters and data layout from a training log file."""
+    patterns = {
+        "model":   re.compile(
+            r"Model: (?:architecture=(?P<architecture>\w+), )?dim=(?P<dim>\d+), heads=(?P<heads>\d+), "
+            r"layers=(?P<layers>\d+), ff=(?P<ff>\d+), dropout=(?P<dropout>\d+(?:\.\d+)?)"
+        ),
+        "dense":   re.compile(r"Dense feature dim: (?P<dim>\d+)"),
+        "layout":  re.compile(r"Dense layout: player_features=(?P<player>\d+), global_features=(?P<global>\d+)"),
+        "regions": re.compile(r"Regions: (?P<n>\d+)"),
+    }
+    with open(log_path, encoding="utf-8") as f:
+        lines = f.readlines()
+
+    config = {}
+    remaining = dict(patterns)
+    for line in reversed(lines):
+        for key, pattern in list(remaining.items()):
+            m = pattern.search(line)
+            if not m:
+                continue
+            if key == "model":
+                config["architecture"]    = m.group("architecture") or "flat"
+                config["embedding_dim"]   = int(m.group("dim"))
+                config["nhead"]           = int(m.group("heads"))
+                config["num_layers"]      = int(m.group("layers"))
+                config["dim_feedforward"] = int(m.group("ff"))
+                config["dropout"]         = float(m.group("dropout"))
+            elif key == "dense":
+                config["dense_feature_dim"] = int(m.group("dim"))
+            elif key == "layout":
+                config["num_player_features"] = int(m.group("player"))
+                config["num_global_features"]  = int(m.group("global"))
+            elif key == "regions":
+                config["num_regions"] = int(m.group("n"))
+            del remaining[key]
+        if not remaining:
+            break
+    return config
 
 
 def _load_resources():
@@ -90,32 +130,40 @@ def _load_resources():
     with open(CHAMP_LIST_PATH, encoding="utf-8") as f:
         _champion_list = json.load(f)
 
-    from ml.predictor.models_pytorch import WinPredictorModel
+    from ml.predictor.unified_model import UnifiedWinPredictorModel
 
     num_champions = len(_champion_list)
 
     if MODEL_PATH.exists():
-        checkpoint = torch.load(MODEL_PATH, map_location="cpu")
-        # Infer architecture from saved weights so we match whatever was trained
-        embedding_dim      = checkpoint["champ_emb.weight"].shape[1]
-        actual_input_dim   = checkpoint["classifier.0.weight"].shape[1]
-        extra_feature_dim  = max(0, actual_input_dim - (15 * embedding_dim + 1))
-        # Count transformer layers from checkpoint keys
-        num_layers = sum(1 for k in checkpoint if k.startswith("transformer.layers.") and k.endswith(".norm1.weight"))
+        try:
+            config = _parse_model_config_from_log(LOG_PATH)
+        except Exception as exc:
+            print(f"[server] Could not parse model config from {LOG_PATH}: {exc}")
+            _model = None
+            _model_loaded = True
+            return
 
-        _model = WinPredictorModel(
+        checkpoint = torch.load(MODEL_PATH, map_location="cpu", weights_only=True)
+        _model = UnifiedWinPredictorModel(
             num_champions=num_champions,
-            embedding_dim=embedding_dim,
-            num_layers=num_layers,
+            dense_feature_dim=config["dense_feature_dim"],
+            num_player_features=config["num_player_features"],
+            num_global_features=config["num_global_features"],
+            num_regions=config.get("num_regions", 1),
+            embedding_dim=config["embedding_dim"],
+            nhead=config["nhead"],
+            dim_feedforward=config["dim_feedforward"],
+            num_layers=config["num_layers"],
             dropout=0.0,
-            extra_feature_dim=extra_feature_dim,
+            architecture=config["architecture"],
         )
         _model.load_state_dict(checkpoint)
         _model.eval()
         print(
-            f"[server] Model loaded from {MODEL_PATH} "
-            f"({num_champions} champions, emb={embedding_dim}, "
-            f"layers={num_layers}, extra={extra_feature_dim})"
+            f"[server] Unified model loaded from {MODEL_PATH} "
+            f"({num_champions} champions, arch={config['architecture']}, "
+            f"emb={config['embedding_dim']}, layers={config['num_layers']}, "
+            f"dense_dim={config['dense_feature_dim']})"
         )
     else:
         print(f"[server] WARNING: {MODEL_PATH} not found — /api/predict will return 503.")
@@ -131,6 +179,7 @@ def _load_resources():
 @app.on_event("startup")
 def startup():
     _load_resources()
+    _load_parquet_files()
 
 
 @app.get("/api/champions")
@@ -188,94 +237,42 @@ def get_live_game(name: str, tag: str, region: str = "na1"):
 @app.get("/api/demo-game")
 def get_demo_game():
     """
-    Returns a random historical match from the local SQLite database, formatted
-    identically to the live-game response so the frontend can exercise all the
-    player-name / stat-row / lane-matchup UI without a real Riot API key.
+    Returns a random historical match from the parquet dataset.
+    Fast: picks a random file, reads only the 12 needed columns, returns one row.
     """
-    from ml.runtime_config import get_db_path
-    from ml.data.match_format import try_build_ordered_participant_record
-
-    db_path = Path(get_db_path())
-    if not db_path.exists():
-        raise HTTPException(status_code=503, detail=f"Database not found at {db_path}.")
-
+    import random
     try:
-        conn = connect_sqlite(db_path, read_only=True)
-        row = conn.execute(
-            "SELECT match_id, ordered_match_json, raw_match_json FROM matches "
-            "WHERE ordered_match_json IS NOT NULL AND raw_match_json IS NOT NULL "
-            "ORDER BY RANDOM() LIMIT 1"
-        ).fetchone()
-        conn.close()
-    except sqlite3.Error as exc:
-        raise HTTPException(status_code=503, detail=f"Could not read database at {db_path}: {exc}") from exc
+        import pyarrow.parquet as pq
+    except ImportError:
+        raise HTTPException(status_code=503, detail="pyarrow not installed.")
 
-    if not row:
-        raise HTTPException(status_code=404, detail="No fully-stored matches found in database.")
+    _load_parquet_files()
+    if not _parquet_match_files:
+        raise HTTPException(status_code=503, detail="No parquet match files found.")
 
-    match_id, ordered_json, raw_json = row
-    ordered = json.loads(ordered_json)
-    raw     = json.loads(raw_json)
+    for _ in range(10):
+        path = random.choice(_parquet_match_files)
+        try:
+            df = pq.ParquetFile(path).read(columns=_PARQUET_COLS).to_pandas()
+        except Exception:
+            continue
+        df = df[df["blue_win"].notna() & df["champion_0"].notna()]
+        if df.empty:
+            continue
+        row = df.sample(1).iloc[0]
+        champs = [str(row[f"champion_{i}"]) for i in range(10)]
+        if all(champs):
+            return {
+                "in_game":  True,
+                "blue_team": champs[:5],
+                "red_team":  champs[5:],
+                "blue_bans": [],
+                "red_bans":  [],
+                "blue_win":  bool(row["blue_win"]),
+                "match_id":  str(row["match_id"]),
+            }
 
-    champions = ordered["champions"]          # 10 names: blue[0:5] + red[5:10]
-    blue_team = champions[:5]
-    red_team  = champions[5:]
-
-    # Pull participants in the same role order using match_format logic
-    ordered_participants, err = try_build_ordered_participant_record(raw["info"])
-
-    # Resolve ban champion names (requires DDragon ID map)
-    id_to_name  = _get_ddragon_id_map()
-    blue_bans, red_bans = [], []
-    for team in raw["info"].get("teams", []):
-        resolved = [id_to_name.get(b.get("championId", -1), "") for b in team.get("bans", [])]
-        if team.get("teamId") == 100:
-            blue_bans = resolved
-        else:
-            red_bans = resolved
-
-    if err or not ordered_participants:
-        return {
-            "in_game":   True,
-            "blue_team": blue_team,
-            "red_team":  red_team,
-            "blue_bans": blue_bans,
-            "red_bans":  red_bans,
-            "match_id":  match_id,
-        }
-
-    blue_players, red_players = [], []
-    blue_stats,   red_stats   = [], []
-    blue_puuids,  red_puuids  = [], []
-
-    for idx, p in enumerate(ordered_participants):
-        game_name = p.get("riotIdGameName") or p.get("summonerName", "Unknown")
-        tag       = p.get("riotIdTagline", "")
-        display   = f"{game_name}#{tag}" if tag else game_name
-        if idx < 5:
-            blue_players.append(display)
-            blue_stats.append({})
-            blue_puuids.append(p.get("puuid"))
-        else:
-            red_players.append(display)
-            red_stats.append({})
-            red_puuids.append(p.get("puuid"))
-
-    return {
-        "in_game":      True,
-        "blue_team":    blue_team,
-        "red_team":     red_team,
-        "blue_players": blue_players,
-        "red_players":  red_players,
-        "blue_stats":   blue_stats,
-        "red_stats":    red_stats,
-        "blue_puuids":  blue_puuids,
-        "red_puuids":   red_puuids,
-        "blue_bans":    blue_bans,
-        "red_bans":     red_bans,
-        "blue_win":     ordered.get("blue_win"),
-        "match_id":     match_id,
-    }
+    raise HTTPException(status_code=404, detail="Could not sample a valid match.")
 
 
 class PredictRequest(BaseModel):
@@ -309,68 +306,77 @@ def predict(req: PredictRequest):
 
     champ_ids = [_champion_list[c] for c in req.champions]
 
-    champion_ids = torch.tensor([champ_ids],              dtype=torch.long)
+    champion_ids = torch.tensor([champ_ids],               dtype=torch.long)
     role_ids     = torch.tensor([[0,1,2,3,4, 0,1,2,3,4]], dtype=torch.long)
     team_ids     = torch.tensor([[0,0,0,0,0, 1,1,1,1,1]], dtype=torch.long)
-    blue_side    = torch.tensor([[req.blue_side]],         dtype=torch.float32)
-    dense_values = None
-    if _model.extra_feature_dim:
+
+    dense_features = None
+    has_players = req.players is not None and any(p is not None for p in req.players)
+    if _model.dense_feature_dim > 0 and has_players:
         from ml.runtime_config import get_db_path
 
         db_path = Path(get_db_path())
-        conn = connect_sqlite(db_path, read_only=True) if db_path.exists() else sqlite3.connect(":memory:")
         try:
-            dense_values = build_dense_features_for_prediction(
-                conn,
-                req.champions,
-                players=req.players,
-            )
-        finally:
-            conn.close()
-        if len(dense_values) != _model.extra_feature_dim:
-            raise HTTPException(
-                status_code=503,
-                detail=(
-                    "Model dense feature shape does not match the current feature pipeline. "
-                    "Re-run 'python -m ml.trainer.train'."
-                ),
-            )
-    dense_features = (
-        torch.tensor([dense_values], dtype=torch.float32)
-        if dense_values is not None else None
-    )
+            conn = connect_sqlite(db_path, read_only=True) if db_path.exists() else sqlite3.connect(":memory:")
+            try:
+                dense_values = build_dense_features_for_prediction(
+                    conn,
+                    req.champions,
+                    players=req.players,
+                )
+            finally:
+                conn.close()
+
+            # The model may have been trained with population prior features
+            # (champ_role_win_rate, champ_role_frequency) interleaved after each
+            # player's base feature block. Pad with defaults when they're absent.
+            base_player_dim = len(dense_values) - _model.num_global_features
+            pipeline_per_slot = base_player_dim // 10
+            model_per_slot = _model.num_player_features
+            if pipeline_per_slot < model_per_slot:
+                prior_dim = model_per_slot - pipeline_per_slot
+                padded = []
+                for i in range(10):
+                    padded.extend(dense_values[i * pipeline_per_slot : (i + 1) * pipeline_per_slot])
+                    padded.extend(_PRIOR_DEFAULTS[:prior_dim])
+                padded.extend(dense_values[base_player_dim:])  # global features
+                dense_values = padded
+
+            dense_features = torch.tensor([dense_values[:_model.dense_feature_dim]], dtype=torch.float32)
+        except Exception as exc:
+            print(f"[server] WARNING: could not build player features ({exc}); using zero-padded features.")
 
     # Capture transformer output to compute per-lane scores
     _captured: dict = {}
     def _hook(module, inp, out):
-        _captured['x'] = out  # [1, 10, embedding_dim]
+        _captured['x'] = out
     handle = _model.transformer.register_forward_hook(_hook)
 
     try:
         with torch.no_grad():
-            logit = _model(champion_ids, role_ids, team_ids, blue_side, dense_features)
+            logit = _model(champion_ids, role_ids, team_ids, dense_features=dense_features)
             blue_prob = float(torch.sigmoid(logit).item())
     finally:
         handle.remove()
 
-    # Per-lane advantage: project each lane's blue-minus-red diff through the
-    # classifier's first linear layer weights.
-    # Feature layout: [flattened(10*d), lane_diff(5*d), blue_side(1), dense(extra)]
+    # Per-lane scores: for cls_global the transformer processes
+    # [CLS, slot_0..slot_9, global_ctx] so blue slots are indices 1..5,
+    # red slots are 6..10. Project each lane diff through trunk+head
+    # as a proxy for per-lane advantage.
     lane_scores = None
-    if 'x' in _captured:
-        x = _captured['x']                          # [1, 10, d]
-        lane_diffs = x[0, :5, :] - x[0, 5:, :]     # [5, d]
-        d = lane_diffs.shape[1]
-        lane_diff_start = 10 * d
-        w = _model.classifier[0].weight.detach()     # [hidden, input_dim]
-        raw = []
-        for i in range(5):
-            w_lane = w[:, lane_diff_start + i * d : lane_diff_start + (i + 1) * d]
-            raw.append(float((w_lane @ lane_diffs[i]).sum().item()))
-        max_abs = max(abs(s) for s in raw) or 1.0
-        # tanh(s/max_abs): max lane → ≈0.76, not ±1.0, so uniform advantages
-        # don't all collapse to "100%" on the frontend
-        lane_scores = [round(math.tanh(s / max_abs), 3) for s in raw]
+    if 'x' in _captured and getattr(_model, 'architecture', None) == 'cls_global':
+        x = _captured['x']  # [1, seq_len, d]
+        if x.shape[1] >= 11:
+            blue_slots = x[0, 1:6, :]   # [5, d]
+            red_slots  = x[0, 6:11, :]  # [5, d]
+            lane_diffs = blue_slots - red_slots  # [5, d]
+            with torch.no_grad():
+                raw = [
+                    float(_model.win_head(_model.shared_trunk(lane_diffs[i:i+1])).item())
+                    for i in range(5)
+                ]
+            max_abs = max(abs(s) for s in raw) or 1.0
+            lane_scores = [round(math.tanh(s / max_abs), 3) for s in raw]
 
     red_prob = 1.0 - blue_prob
     diff = abs(blue_prob - 0.5)

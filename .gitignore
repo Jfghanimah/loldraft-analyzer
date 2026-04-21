@@ -147,3 +147,5 @@ ml/save_data/lol_dataset_v1/
 ml/save_data/lol_dataset_v1_smoke/
 ml/save_data/lol_dataset_v1_bench/
 ml/save_data/prepared_training_dataset/
+ml/save_data/best_unified_win_predictor_*.pth
+ml/save_data/latest_train_log_*.txt

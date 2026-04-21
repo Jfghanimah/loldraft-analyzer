@@ -1,3 +1,4 @@
+import argparse
 import math
 import os
 import re
@@ -5,10 +6,14 @@ import re
 import pandas as pd
 import torch
 
+from ml.data.prepare_training_examples import load_training_examples_dataframe
 from ml.data.pytorch_data import LeagueDataset
-from ml.features.recent_history import GLOBAL_FEATURES, PARTICIPANT_FEATURES
 from ml.predictor.unified_model import UnifiedWinPredictorModel
-from ml.trainer.train_unified_model import DEFAULT_FEATURE_CACHE_PATH
+from ml.trainer.train_unified_model import (
+    DEFAULT_FEATURE_CACHE_PATH,
+    _drop_population_prior_columns,
+    _infer_dense_feature_layout,
+)
 
 DEFAULT_CHECKPOINT_PATH = "ml/save_data/best_unified_win_predictor.pth"
 DEFAULT_LOG_PATH = "ml/save_data/latest_train_log.txt"
@@ -30,6 +35,16 @@ def _load_cached_dataframe(cache_path):
     return bundle["dataframe"]
 
 
+def _load_evaluation_dataframe(cache_path, training_data_dir=None, queue_id=420, drop_population_priors=False):
+    if training_data_dir:
+        dataframe, _ = load_training_examples_dataframe(training_data_dir, queue_id=queue_id)
+    else:
+        dataframe = _load_cached_dataframe(cache_path)
+    if drop_population_priors:
+        dataframe, _ = _drop_population_prior_columns(dataframe)
+    return dataframe
+
+
 def _parse_model_config(log_path):
     if not os.path.exists(log_path):
         raise FileNotFoundError(
@@ -38,21 +53,24 @@ def _parse_model_config(log_path):
         )
 
     pattern = re.compile(
-        r"Model: dim=(?P<dim>\d+), heads=(?P<heads>\d+), layers=(?P<layers>\d+), "
+        r"Model: (?:architecture=(?P<architecture>\w+), )?dim=(?P<dim>\d+), heads=(?P<heads>\d+), layers=(?P<layers>\d+), "
         r"ff=(?P<ff>\d+), dropout=(?P<dropout>\d+(?:\.\d+)?)"
     )
     with open(log_path, "r", encoding="utf-8") as handle:
         lines = handle.readlines()
 
+    drop_population_priors = any("Drop population priors: True" in line for line in lines)
     for line in reversed(lines):
         match = pattern.search(line)
         if match:
             return {
+                "architecture": match.group("architecture") or "flat",
                 "embedding_dim": int(match.group("dim")),
                 "nhead": int(match.group("heads")),
                 "num_layers": int(match.group("layers")),
                 "dim_feedforward": int(match.group("ff")),
                 "dropout": float(match.group("dropout")),
+                "drop_population_priors": drop_population_priors,
             }
 
     raise ValueError(f"Could not infer model config from {log_path}")
@@ -139,35 +157,50 @@ def _target_summary(name, predictions, targets):
 
 
 def main():
-    cache_path = DEFAULT_FEATURE_CACHE_PATH
-    checkpoint_path = DEFAULT_CHECKPOINT_PATH
-    log_path = DEFAULT_LOG_PATH
+    parser = argparse.ArgumentParser(description="Evaluate auxiliary targets for a unified checkpoint")
+    parser.add_argument("--checkpoint-path", default=DEFAULT_CHECKPOINT_PATH)
+    parser.add_argument("--log-path", default=DEFAULT_LOG_PATH)
+    parser.add_argument("--feature-cache-path", default=DEFAULT_FEATURE_CACHE_PATH)
+    parser.add_argument("--training-data-dir", default=None)
+    parser.add_argument("--queue-id", type=int, default=420)
+    args = parser.parse_args()
 
-    if not os.path.exists(cache_path):
+    cache_path = args.feature_cache_path
+    checkpoint_path = args.checkpoint_path
+    log_path = args.log_path
+
+    if not args.training_data_dir and not os.path.exists(cache_path):
         raise FileNotFoundError(f"Feature cache not found at {cache_path}")
     if not os.path.exists(checkpoint_path):
         raise FileNotFoundError(f"Checkpoint not found at {checkpoint_path}")
 
-    dataframe = _load_cached_dataframe(cache_path)
+    config = _parse_model_config(log_path)
+    dataframe = _load_evaluation_dataframe(
+        cache_path,
+        args.training_data_dir,
+        queue_id=args.queue_id,
+        drop_population_priors=config["drop_population_priors"],
+    )
     dataset = LeagueDataset(dataframe, mode="finetune")
     val = _build_val_tensors(dataset)
-    config = _parse_model_config(log_path)
 
     dense_feature_dim = dataset.dense_features.shape[1] if dataset.dense_features is not None else 0
+    num_player_features, num_global_features = _infer_dense_feature_layout(dense_feature_dim)
     num_regions = int(dataset.region_ids.max().item()) + 1 if dataset.region_ids is not None and len(dataset.region_ids) else 1
     num_champions = int(dataset.matches.max().item()) + 1
 
     model = UnifiedWinPredictorModel(
         num_champions=num_champions,
         dense_feature_dim=dense_feature_dim,
-        num_player_features=len(PARTICIPANT_FEATURES),
-        num_global_features=len(GLOBAL_FEATURES),
+        num_player_features=num_player_features,
+        num_global_features=num_global_features,
         num_regions=num_regions,
         embedding_dim=config["embedding_dim"],
         nhead=config["nhead"],
         dim_feedforward=config["dim_feedforward"],
         num_layers=config["num_layers"],
         dropout=config["dropout"],
+        architecture=config["architecture"],
     )
     state_dict = torch.load(checkpoint_path, map_location="cpu")
     model.load_state_dict(state_dict)

@@ -654,18 +654,24 @@ def build_dense_features_for_prediction(
         )
 
     try:
-        row = conn.execute(
-            """
-            SELECT game_version
-            FROM matches
-            WHERE (? IS NULL OR queue_id = ?)
-              AND game_version IS NOT NULL
-              AND game_version != ''
-            ORDER BY game_creation DESC, match_id DESC
-            LIMIT 1
-            """,
-            (queue_id, queue_id),
-        ).fetchone()
+        if queue_id is None:
+            row = conn.execute(
+                """
+                SELECT game_version FROM matches
+                WHERE game_version IS NOT NULL AND game_version != ''
+                ORDER BY game_creation DESC, match_id DESC LIMIT 1
+                """
+            ).fetchone()
+        else:
+            row = conn.execute(
+                """
+                SELECT game_version FROM matches
+                WHERE queue_id = ?
+                  AND game_version IS NOT NULL AND game_version != ''
+                ORDER BY game_creation DESC LIMIT 1
+                """,
+                (queue_id,),
+            ).fetchone()
     except sqlite3.OperationalError:
         row = None
     feature_values.extend(parse_patch(row[0] if row else ""))

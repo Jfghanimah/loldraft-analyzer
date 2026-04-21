@@ -1,3 +1,6 @@
+# this file does 
+
+import argparse
 import json
 import math
 import os
@@ -5,6 +8,7 @@ import os
 import pandas as pd
 import torch
 
+from ml.data.prepare_training_examples import load_training_examples_dataframe
 from ml.data.pytorch_data import CHAMPION_COLUMNS, LeagueDataset
 from ml.evaluate_unified_aux import (
     DEFAULT_CHECKPOINT_PATH,
@@ -15,8 +19,8 @@ from ml.evaluate_unified_aux import (
     _load_cached_dataframe,
     _parse_model_config,
 )
-from ml.features.recent_history import GLOBAL_FEATURES, PARTICIPANT_FEATURES
 from ml.predictor.unified_model import UnifiedWinPredictorModel
+from ml.trainer.train_unified_model import _drop_population_prior_columns, _infer_dense_feature_layout
 
 ANALYSIS_SPECS = [
     ("Azir", "mid"),
@@ -64,25 +68,36 @@ def _build_val_indices(n):
     return perm[train_size:]
 
 
-def _load_model(dataset):
-    config = _parse_model_config(DEFAULT_LOG_PATH)
+def _load_dataframe(cache_path, training_data_dir=None, queue_id=420, drop_population_priors=False):
+    if training_data_dir:
+        dataframe, _ = load_training_examples_dataframe(training_data_dir, queue_id=queue_id)
+    else:
+        dataframe = _load_cached_dataframe(cache_path)
+    if drop_population_priors:
+        dataframe, _ = _drop_population_prior_columns(dataframe)
+    return dataframe
+
+
+def _load_model(dataset, checkpoint_path, config):
     dense_feature_dim = dataset.dense_features.shape[1] if dataset.dense_features is not None else 0
+    num_player_features, num_global_features = _infer_dense_feature_layout(dense_feature_dim)
     num_regions = int(dataset.region_ids.max().item()) + 1 if dataset.region_ids is not None and len(dataset.region_ids) else 1
     num_champions = int(dataset.matches.max().item()) + 1
 
     model = UnifiedWinPredictorModel(
         num_champions=num_champions,
         dense_feature_dim=dense_feature_dim,
-        num_player_features=len(PARTICIPANT_FEATURES),
-        num_global_features=len(GLOBAL_FEATURES),
+        num_player_features=num_player_features,
+        num_global_features=num_global_features,
         num_regions=num_regions,
         embedding_dim=config["embedding_dim"],
         nhead=config["nhead"],
         dim_feedforward=config["dim_feedforward"],
         num_layers=config["num_layers"],
         dropout=config["dropout"],
+        architecture=config["architecture"],
     )
-    state_dict = torch.load(DEFAULT_CHECKPOINT_PATH, map_location="cpu")
+    state_dict = torch.load(checkpoint_path, map_location="cpu")
     model.load_state_dict(state_dict)
     model.eval()
     return model, config
@@ -120,21 +135,35 @@ def _format_float(value):
 
 
 def main():
-    if not os.path.exists(DEFAULT_FEATURE_CACHE_PATH):
-        raise FileNotFoundError(f"Feature cache not found at {DEFAULT_FEATURE_CACHE_PATH}")
-    if not os.path.exists(DEFAULT_CHECKPOINT_PATH):
-        raise FileNotFoundError(f"Checkpoint not found at {DEFAULT_CHECKPOINT_PATH}")
+    parser = argparse.ArgumentParser(description="Analyze off-meta champion-role predictions")
+    parser.add_argument("--checkpoint-path", default=DEFAULT_CHECKPOINT_PATH)
+    parser.add_argument("--log-path", default=DEFAULT_LOG_PATH)
+    parser.add_argument("--feature-cache-path", default=DEFAULT_FEATURE_CACHE_PATH)
+    parser.add_argument("--training-data-dir", default=None)
+    parser.add_argument("--queue-id", type=int, default=420)
+    args = parser.parse_args()
+
+    if not args.training_data_dir and not os.path.exists(args.feature_cache_path):
+        raise FileNotFoundError(f"Feature cache not found at {args.feature_cache_path}")
+    if not os.path.exists(args.checkpoint_path):
+        raise FileNotFoundError(f"Checkpoint not found at {args.checkpoint_path}")
 
     champion_list, id_to_name = _load_champion_maps()
-    dataframe = _load_cached_dataframe(DEFAULT_FEATURE_CACHE_PATH)
+    config = _parse_model_config(args.log_path)
+    dataframe = _load_dataframe(
+        args.feature_cache_path,
+        args.training_data_dir,
+        queue_id=args.queue_id,
+        drop_population_priors=config["drop_population_priors"],
+    )
     dataset = LeagueDataset(dataframe, mode="finetune")
     val_idx = _build_val_indices(len(dataset))
-    model, config = _load_model(dataset)
+    model, config = _load_model(dataset, args.checkpoint_path, config)
     val_probs = _predict_val_win_probs(model, dataset=dataset, val_idx=val_idx)
 
     val_index_map = {int(row_idx): pos for pos, row_idx in enumerate(val_idx.tolist())}
 
-    print(f"checkpoint={DEFAULT_CHECKPOINT_PATH}")
+    print(f"checkpoint={args.checkpoint_path}")
     print(f"log_config={config}")
     print(f"dataset_matches={len(dataframe):,}")
     print(f"val_matches={len(val_idx):,}")
